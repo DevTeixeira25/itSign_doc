@@ -1,0 +1,13 @@
+﻿node_modules
+.pnpm-store
+.turbo
+.next
+dist
+coverage
+.env
+.env.*
+!.env.example
+.dart_tool
+build
+# API storage (uploaded files, certs, signatures)
+apps/api/storage/

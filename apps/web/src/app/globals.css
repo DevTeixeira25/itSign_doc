@@ -1,0 +1,707 @@
+﻿:root {
+  color-scheme: light;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --success: #16a34a;
+  --warning: #f59e0b;
+  --danger: #dc2626;
+  --gray-50: #f8fafc;
+  --gray-100: #f1f5f9;
+  --gray-200: #e2e8f0;
+  --gray-300: #cbd5e1;
+  --gray-500: #64748b;
+  --gray-700: #334155;
+  --gray-900: #0f172a;
+  --radius: 8px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: var(--gray-50);
+  color: var(--gray-900);
+  line-height: 1.5;
+}
+
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 20px;
+}
+
+.center-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+/* ── Header / Nav ────────────────────────────────────────── */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: #fff;
+  border-bottom: 1px solid var(--gray-200);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.topbar h1 {
+  font-size: 1.25rem;
+  margin: 0;
+  color: var(--primary);
+}
+
+.topbar nav {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.topbar a,
+.topbar button {
+  font-size: 0.9rem;
+  text-decoration: none;
+  color: var(--gray-700);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.topbar a:hover,
+.topbar button:hover {
+  color: var(--primary);
+}
+
+/* ── Cards ───────────────────────────────────────────────── */
+.card {
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-bottom: 16px;
+}
+
+.card h2 {
+  margin: 0 0 12px;
+  font-size: 1.1rem;
+}
+
+/* ── Forms ───────────────────────────────────────────────── */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--gray-700);
+  margin-bottom: 4px;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 0.95rem;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  border-color: var(--primary);
+}
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--primary-hover);
+}
+
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.btn-secondary {
+  background: var(--gray-200);
+  color: var(--gray-700);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Status badges ───────────────────────────────────────── */
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 99px;
+  text-transform: uppercase;
+}
+
+.badge-draft { background: var(--gray-200); color: var(--gray-700); }
+.badge-sent { background: #dbeafe; color: #1e40af; }
+.badge-in_progress { background: #fef3c7; color: #92400e; }
+.badge-completed { background: #dcfce7; color: #166534; }
+.badge-canceled { background: #fecaca; color: #991b1b; }
+.badge-expired { background: var(--gray-200); color: var(--gray-500); }
+
+/* ── Tables ──────────────────────────────────────────────── */
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th, td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--gray-200);
+}
+
+th {
+  font-weight: 600;
+  color: var(--gray-500);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+tr:hover td {
+  background: var(--gray-50);
+}
+
+/* ── Utilities ───────────────────────────────────────────── */
+.flex {
+  display: flex;
+}
+
+.gap-8 { gap: 8px; }
+.gap-16 { gap: 16px; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.mt-16 { margin-top: 16px; }
+.mt-24 { margin-top: 24px; }
+.mb-16 { margin-bottom: 16px; }
+.text-center { text-align: center; }
+.text-muted { color: var(--gray-500); }
+.text-sm { font-size: 0.85rem; }
+
+.loader {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--gray-200);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Alert ───────────────────────────────────────────────── */
+.alert {
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+}
+
+.alert-error {
+  background: #fef2f2;
+  color: var(--danger);
+  border: 1px solid #fecaca;
+}
+
+.alert-success {
+  background: #f0fdf4;
+  color: var(--success);
+  border: 1px solid #bbf7d0;
+}
+
+/* ── Audit trail ─────────────────────────────────────────── */
+.timeline {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.timeline li {
+  position: relative;
+  padding: 8px 0 8px 24px;
+  font-size: 0.85rem;
+}
+
+.timeline li::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 14px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+.timeline li::after {
+  content: "";
+  position: absolute;
+  left: 9px;
+  top: 22px;
+  width: 2px;
+  height: calc(100% - 14px);
+  background: var(--gray-200);
+}
+
+.timeline li:last-child::after {
+  display: none;
+}
+
+/* ── Signature canvas ────────────────────────────────────── */
+.signature-pad {
+  border: 2px dashed var(--gray-300);
+  border-radius: var(--radius);
+  cursor: crosshair;
+  touch-action: none;
+  width: 100%;
+  max-width: 500px;
+}
+
+.signature-pad:hover {
+  border-color: var(--primary);
+}
+
+/* ── Action cards (dashboard) ────────────────────────────── */
+.action-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.action-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 32px 24px;
+  border-radius: var(--radius);
+  border: 2px solid var(--gray-200);
+  background: #fff;
+  text-decoration: none;
+  color: var(--gray-900);
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+  cursor: pointer;
+}
+
+.action-card:hover {
+  border-color: var(--primary);
+  box-shadow: 0 4px 20px rgba(37, 99, 235, 0.12);
+  transform: translateY(-2px);
+}
+
+.action-card-icon {
+  font-size: 2.5rem;
+  margin-bottom: 12px;
+}
+
+.action-card h3 {
+  margin: 0 0 6px;
+  font-size: 1.1rem;
+}
+
+.action-card p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--gray-500);
+}
+
+.action-card-sign { border-left: 4px solid var(--primary); }
+.action-card-send { border-left: 4px solid var(--success); }
+
+/* ── Step progress bar ───────────────────────────────────── */
+.step-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 24px;
+  padding: 16px 0;
+}
+
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: var(--gray-200);
+  color: var(--gray-500);
+}
+
+.step-label {
+  font-size: 0.82rem;
+  color: var(--gray-500);
+}
+
+.step-item.active .step-num {
+  background: var(--primary);
+  color: #fff;
+}
+
+.step-item.active .step-label {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.step-item.completed .step-num {
+  background: var(--success);
+  color: #fff;
+}
+
+.step-item.completed .step-label {
+  color: var(--success);
+}
+
+.step-line {
+  flex: 0 0 40px;
+  height: 2px;
+  background: var(--gray-200);
+  margin: 0 8px;
+}
+
+/* ── Upload area ─────────────────────────────────────────── */
+.upload-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  border: 2px dashed var(--gray-300);
+  border-radius: var(--radius);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  margin-bottom: 16px;
+}
+
+.upload-area:hover {
+  border-color: var(--primary);
+  background: #f0f5ff;
+}
+
+.upload-icon {
+  font-size: 2.5rem;
+  margin-bottom: 8px;
+}
+
+.upload-area-file {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── Self-sign layout ────────────────────────────────────── */
+.self-sign-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.self-sign-sidebar .card {
+  position: sticky;
+  top: 70px;
+}
+
+.self-sign-pdf {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ── PDF viewer ──────────────────────────────────────────── */
+.pdf-viewer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.pdf-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  padding: 6px 12px;
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+}
+
+.pdf-page-container {
+  position: relative;
+  background: #fff;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.pdf-page-container.hidden {
+  display: none;
+}
+
+.pdf-page-container canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.pdf-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px;
+}
+
+/* ── Signature field overlay ─────────────────────────────── */
+.sig-field-overlay {
+  position: absolute;
+  border: 2px dashed var(--primary);
+  background: rgba(37, 99, 235, 0.08);
+  border-radius: 4px;
+  cursor: move;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.sig-field-overlay:hover {
+  background: rgba(37, 99, 235, 0.15);
+}
+
+.sig-field-overlay.signed {
+  border-style: solid;
+  border-color: var(--success);
+  background: rgba(22, 163, 74, 0.05);
+}
+
+.sig-field-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--primary);
+  pointer-events: none;
+}
+
+/* ── Signature pad component ─────────────────────────────── */
+.sig-pad-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sig-pad-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--gray-200);
+}
+
+.sig-pad-tab {
+  padding: 8px 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  color: var(--gray-500);
+}
+
+.sig-pad-tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+.sig-pad-draw {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.sig-pad-type {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sig-type-input {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 1rem;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius);
+  outline: none;
+}
+
+.sig-type-input:focus {
+  border-color: var(--primary);
+}
+
+.sig-type-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--gray-200);
+  border-radius: var(--radius);
+  font-family: 'Brush Script MT', 'Segoe Script', cursive;
+  font-size: 2rem;
+  color: var(--gray-700);
+}
+
+.sig-pad-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.sig-preview-box {
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  padding: 12px;
+  background: var(--gray-50);
+  text-align: center;
+  margin-top: 12px;
+}
+
+.sig-preview-box img {
+  max-width: 100%;
+  max-height: 80px;
+}
+
+/* ── Modal ───────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal-content {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 24px;
+  max-width: 580px;
+  width: 95%;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.2);
+}
+
+.modal-content h2 {
+  margin: 0 0 16px;
+}
+
+/* ── Button sizes ────────────────────────────────────────── */
+.btn-sm {
+  padding: 4px 12px;
+  font-size: 0.8rem;
+}
+
+/* ── PDF field overlays ──────────────────────────────────── */
+.pdf-field {
+  position: absolute;
+  border: 1px solid var(--primary);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  overflow: hidden;
+}
+
+.pdf-field-signature { background: rgba(37, 99, 235, 0.08); border-style: dashed; }
+.pdf-field-text { background: rgba(245, 158, 11, 0.08); border-color: var(--warning); }
+.pdf-field-date { background: rgba(22, 163, 74, 0.08); border-color: var(--success); }
+.pdf-field-filled { border-style: solid; }
+.pdf-field-label { pointer-events: none; color: var(--gray-500); }
+.pdf-field-sig-img { width: 100%; height: 100%; object-fit: contain; }
+.pdf-field-value { color: var(--gray-900); font-weight: 600; }
+
+.justify-center { justify-content: center; }
+
+/* ── Recipient row ───────────────────────────────────────── */
+.recipient-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+  .self-sign-layout {
+    grid-template-columns: 1fr;
+  }
+  .self-sign-sidebar .card {
+    position: static;
+  }
+  .step-label {
+    display: none;
+  }
+  .action-cards {
+    grid-template-columns: 1fr;
+  }
+}

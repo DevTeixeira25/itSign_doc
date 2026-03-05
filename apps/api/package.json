@@ -1,0 +1,28 @@
+{
+  "name": "@itsign/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "lint": "echo \"add api lint\"",
+    "typecheck": "tsc --noEmit",
+    "test": "echo \"add api tests\""
+  },
+  "dependencies": {
+    "@fastify/cors": "11.0.0",
+    "@fastify/jwt": "9.0.2",
+    "@fastify/multipart": "9.0.3",
+    "@itsign/shared-types": "workspace:*",
+    "fastify": "5.2.1",
+    "postgres": "3.4.5",
+    "zod": "3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "22.13.10",
+    "tsx": "4.19.3",
+    "typescript": "5.8.2"
+  }
+}

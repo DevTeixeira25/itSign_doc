@@ -1,19 +1,23 @@
 {
+  "firestore": {
+    "rules": "firestore.rules"
+  },
   "hosting": {
-    "public": "apps/web/out",
+    "source": "apps/web",
     "ignore": [
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
     ],
+    "frameworksBackend": {
+      "region": "southamerica-east1",
+      "memory": "512MiB",
+      "maxInstances": 10
+    },
     "rewrites": [
       {
         "source": "/v1/**",
         "function": "api"
-      },
-      {
-        "source": "**",
-        "destination": "/index.html"
       }
     ],
     "headers": [

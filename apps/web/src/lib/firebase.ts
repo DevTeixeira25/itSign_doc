@@ -2,13 +2,13 @@ import { initializeApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
-  apiKey: "REMOVED_API_KEY",
-  authDomain: "itsign-79d36.firebaseapp.com",
-  projectId: "itsign-79d36",
-  storageBucket: "itsign-79d36.firebasestorage.app",
-  messagingSenderId: "727349596425",
-  appId: "1:727349596425:web:3c76720fd67978782c03d8",
-  measurementId: "G-YP5PQ1XW3N",
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
 // Prevent re-initialization in Next.js hot-reload

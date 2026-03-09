@@ -5,6 +5,8 @@ import { useRef, useState } from "react";
 interface SignaturePadProps {
   onSave: (dataUrl: string) => void;
   onCancel?: () => void;
+  onCertificateSign?: () => void;
+  onGovBrSign?: () => void;
   width?: number;
   height?: number;
 }
@@ -12,6 +14,8 @@ interface SignaturePadProps {
 export default function SignaturePad({
   onSave,
   onCancel,
+  onCertificateSign,
+  onGovBrSign,
   width = 500,
   height = 200,
 }: SignaturePadProps) {
@@ -103,6 +107,22 @@ export default function SignaturePad({
         >
           ⌨️ Digitar
         </button>
+        {onCertificateSign && (
+          <button
+            className="sig-pad-tab"
+            onClick={onCertificateSign}
+          >
+            🔐 Certificado
+          </button>
+        )}
+        {onGovBrSign && (
+          <button
+            className="sig-pad-tab"
+            onClick={onGovBrSign}
+          >
+            🏛️ Gov.br
+          </button>
+        )}
       </div>
 
       {mode === "draw" ? (

@@ -1,76 +1,57 @@
 import type { FastifyInstance } from "fastify";
-import { registerSchema, loginSchema } from "./auth.schemas.js";
-import { registerUser, authenticateUser, getUserById } from "./auth.service.js";
+import { registerSchema } from "./auth.schemas.js";
+import { registerUser, getUserById, getUserByEmail } from "./auth.service.js";
 import { authGuard } from "../../lib/auth-guard.js";
 import { auditLog } from "../audit/audit.service.js";
-import { AppError } from "../../lib/errors.js";
 
 export async function authRoutes(app: FastifyInstance) {
-  // ── Register ──────────────────────────────────────────────
-  app.post("/v1/auth/register", async (request, reply) => {
-    const body = registerSchema.parse(request.body);
-    const { user, organizationId } = await registerUser(body);
+  // ── Register (Firebase-authenticated) ─────────────────────
+  // The client creates the Firebase user first, then calls this
+  // endpoint with the Firebase ID token to create org + local user.
+  app.post(
+    "/v1/auth/register",
+    { preHandler: [authGuard] },
+    async (request, reply) => {
+      const body = registerSchema.parse(request.body);
+      const firebaseUid = request.auth.firebaseUid;
+      const email = request.auth.email || body.email || '';
 
-    const token = app.jwt.sign(
-      { userId: user.id, organizationId, email: user.email },
-      { expiresIn: "8h" }
-    );
+      const { user, organizationId } = await registerUser({
+        organizationName: body.organizationName,
+        name: body.name,
+        email,
+        firebaseUid: firebaseUid!,
+      });
 
-    await auditLog({
-      organizationId,
-      actorUserId: user.id,
-      actorEmail: user.email,
-      action: "user_login",
-      ipAddress: request.ip,
-      userAgent: request.headers["user-agent"] ?? null,
-    });
+      await auditLog({
+        organizationId,
+        actorUserId: user.id,
+        actorEmail: user.email,
+        action: "user_registered",
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
 
-    return reply.status(201).send({
-      accessToken: token,
-      user: { id: user.id, organizationId, name: user.name, email: user.email },
-    });
-  });
-
-  // ── Login ─────────────────────────────────────────────────
-  app.post("/v1/auth/login", async (request, reply) => {
-    const body = loginSchema.parse(request.body);
-    const result = await authenticateUser(body.email, body.password);
-
-    const token = app.jwt.sign(
-      {
-        userId: result.userId,
-        organizationId: result.organizationId,
-        email: result.email,
-      },
-      { expiresIn: "8h" }
-    );
-
-    await auditLog({
-      organizationId: result.organizationId,
-      actorUserId: result.userId,
-      actorEmail: result.email,
-      action: "user_login",
-      ipAddress: request.ip,
-      userAgent: request.headers["user-agent"] ?? null,
-    });
-
-    return reply.send({
-      accessToken: token,
-      user: {
-        id: result.userId,
-        organizationId: result.organizationId,
-        name: result.name,
-        email: result.email,
-      },
-    });
-  });
+      return reply.status(201).send({
+        user: { id: user.id, organizationId, name: user.name, email: user.email },
+      });
+    }
+  );
 
   // ── Me (profile) ──────────────────────────────────────────
   app.get(
     "/v1/auth/me",
     { preHandler: [authGuard] },
     async (request, reply) => {
-      const user = await getUserById(request.auth.userId);
+      // First try by userId, then by email (for users who just registered)
+      let user = request.auth.userId
+        ? await getUserById(request.auth.userId)
+        : null;
+
+      if (!user && request.auth.email) {
+        user = await getUserByEmail(request.auth.email);
+      }
+
       if (!user) {
         return reply
           .status(404)

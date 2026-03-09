@@ -28,7 +28,7 @@ export default function DashboardPage() {
       return;
     }
     if (user) {
-      api.listEnvelopes().then((res) => {
+      api.listEnvelopes().then((res: any) => {
         setEnvelopes(res.data);
         setTotal(res.total);
         setLoading(false);
@@ -46,6 +46,7 @@ export default function DashboardPage() {
           <Link href="/dashboard">Dashboard</Link>
           <Link href="/self-sign">Assinar</Link>
           <Link href="/envelopes/new">Enviar para assinatura</Link>
+          <Link href="/verify/_">Verificar</Link>
           <button onClick={logout}>Sair</button>
         </nav>
       </header>
@@ -69,6 +70,11 @@ export default function DashboardPage() {
             <span className="action-card-icon">📤</span>
             <h3>Enviar para assinatura</h3>
             <p>Envie um documento para outras pessoas assinarem</p>
+          </Link>
+          <Link href="/verify/_" className="action-card" style={{ borderColor: "#bfdbfe", background: "#eff6ff" }}>
+            <span className="action-card-icon">🔍</span>
+            <h3>Verificar documento</h3>
+            <p>Verifique a autenticidade de um documento assinado</p>
           </Link>
         </div>
 

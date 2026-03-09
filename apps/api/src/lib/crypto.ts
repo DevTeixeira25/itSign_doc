@@ -1,4 +1,4 @@
-import { randomBytes, createHash } from "node:crypto";
+import { randomBytes, createHash, createHmac } from "node:crypto";
 
 /** Generate a cryptographically random hex token */
 export function generateToken(bytes = 32): string {
@@ -40,4 +40,27 @@ export async function verifyPassword(
 /** Generate a v4-style UUID using Node built-in */
 export function uuid(): string {
   return crypto.randomUUID();
+}
+
+/**
+ * Generate HMAC-SHA256 — used for signature integrity proofs.
+ * Links signer identity + document hash + timestamp into an unforgeable chain.
+ */
+export function hmacSha256(data: string, secret: string): string {
+  return createHmac("sha256", secret).update(data).digest("hex");
+}
+
+/**
+ * Generate a human-readable verification code (e.g. "ITSN-A3F8-BC12-D9E4").
+ * Derived deterministically from envelope + certificate hash so it's reproducible.
+ */
+export function generateVerificationCode(envelopeId: string, certHash: string): string {
+  const hash = sha256(`${envelopeId}:${certHash}`);
+  const parts = [
+    "ITSN",
+    hash.slice(0, 4).toUpperCase(),
+    hash.slice(4, 8).toUpperCase(),
+    hash.slice(8, 12).toUpperCase(),
+  ];
+  return parts.join("-");
 }

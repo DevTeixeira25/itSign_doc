@@ -1,15 +1,14 @@
 ﻿/** @type {import("next").NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Proxy API requests to the backend in development
-  async rewrites() {
-    return [
-      {
-        source: "/api/:path*",
-        destination: "http://localhost:3001/:path*",
-      },
-    ];
-  },
+
+  // Static export for Firebase Hosting
+  // In production, `pnpm build` outputs to `out/` folder
+  // API calls use NEXT_PUBLIC_API_URL (empty string = same origin via Hosting rewrite)
+  output: "export",
+
+  // Disable image optimization (not supported with static export)
+  images: { unoptimized: true },
 };
 
 export default nextConfig;

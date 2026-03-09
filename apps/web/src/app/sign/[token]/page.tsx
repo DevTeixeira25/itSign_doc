@@ -1,30 +1,40 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import { api } from "../../../lib/api";
+import CertificateUpload from "../../../components/CertificateUpload";
+import GovBrSign from "../../../components/GovBrSign";
+
+type SignMethod = "draw" | "type" | "certificate" | "govbr";
 
 export default function SignPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const token = params.token as string;
   const [info, setInfo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [signing, setSigning] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
-  const [signatureType, setSignatureType] = useState<"draw" | "type">("draw");
+  const [signMethod, setSignMethod] = useState<SignMethod>("draw");
   const [typedName, setTypedName] = useState("");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawing = useRef(false);
 
+  // Certificate / Gov.br results
+  const [certResult, setCertResult] = useState<any>(null);
+  const [govbrResult, setGovbrResult] = useState<any>(null);
+
   useEffect(() => {
     api
       .getSigningInfo(token)
-      .then((data) => {
+      .then((data: any) => {
         setInfo(data);
         if (data.alreadySigned) setDone(true);
       })
-      .catch((err) => setError(err.message ?? "Link inválido"))
+      .catch((err: any) => setError(err.message ?? "Link inválido"))
       .finally(() => setLoading(false));
   }, [token]);
 
@@ -60,12 +70,13 @@ export default function SignPage() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
 
+  // ── Electronic sign (draw / type) ──────────────────────
   async function handleSign() {
     setError("");
     setSigning(true);
 
     let signatureData = "";
-    if (signatureType === "draw") {
+    if (signMethod === "draw") {
       signatureData = canvasRef.current?.toDataURL("image/png") ?? "";
       if (!signatureData || signatureData === "data:,") {
         setError("Desenhe sua assinatura");
@@ -82,12 +93,86 @@ export default function SignPage() {
     }
 
     try {
-      await api.sign(token, { signatureData, signatureType });
+      await api.sign(token, { signatureData, signatureType: signMethod });
       setDone(true);
     } catch (err: any) {
       setError(err.message ?? "Erro ao assinar");
     } finally {
       setSigning(false);
+    }
+  }
+
+  // ── Certificate ICP-Brasil sign ────────────────────────
+  async function handleCertificateSign(certFile: File, certPassword: string) {
+    setError("");
+    setSigning(true);
+    try {
+      const result = await api.signWithCertificate({
+        certificateFile: certFile,
+        password: certPassword,
+        recipientToken: token,
+        envelopeId: info?.envelopeId ?? "",
+      });
+      setCertResult(result);
+      setDone(true);
+    } catch (err: any) {
+      setError(err.message ?? "Erro ao assinar com certificado");
+    } finally {
+      setSigning(false);
+    }
+  }
+
+  // ── Gov.br sign ────────────────────────────────────────
+  async function handleGovBrSign() {
+    setError("");
+    setSigning(true);
+    try {
+      // Start Gov.br OAuth2 flow using public-authorize (no login needed)
+      const { authUrl } = await api.govbrPublicAuthorize({
+        recipientToken: token,
+        returnPath: `/sign/${token}`,
+      });
+      // Redirect to Gov.br login page
+      window.location.href = authUrl;
+    } catch (err: any) {
+      setError(err.message ?? "Erro ao iniciar assinatura Gov.br");
+      setSigning(false);
+    }
+  }
+
+  // ── Handle Gov.br callback return ────────────────────
+  useEffect(() => {
+    const govbrSessionId = searchParams.get("govbr_session");
+    if (!govbrSessionId) return;
+
+    (async () => {
+      setSigning(true);
+      setError("");
+      try {
+        const result = await api.govbrSign(govbrSessionId, token);
+        setGovbrResult(result);
+        setDone(true);
+      } catch (err: any) {
+        setError(err.message ?? "Erro ao assinar com Gov.br");
+      } finally {
+        setSigning(false);
+      }
+    })();
+  }, [searchParams, token]);
+
+  async function handleDownload() {
+    try {
+      const { blob, fileName } = await api.downloadSignedDocument(token);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setError(err.message ?? "Erro ao baixar documento");
     }
   }
 
@@ -121,6 +206,33 @@ export default function SignPage() {
             Sua assinatura foi registrada com sucesso para o documento{" "}
             <strong>{info?.envelopeTitle}</strong>.
           </p>
+
+          {certResult?.certificate && (
+            <div style={{ textAlign: "left", marginTop: 16, padding: 12, background: "var(--gray-50)", borderRadius: 8, fontSize: "0.85rem" }}>
+              <strong>🔐 Certificado ICP-Brasil</strong>
+              <p style={{ margin: "4px 0" }}>Titular: {certResult.certificate.commonName}</p>
+              {certResult.certificate.cpf && <p style={{ margin: "4px 0" }}>CPF: {certResult.certificate.cpf}</p>}
+              <p style={{ margin: "4px 0" }}>Emissor: {certResult.certificate.issuer}</p>
+              <p style={{ margin: "4px 0" }}>Nível: {certResult.certificate.signatureLevel}</p>
+            </div>
+          )}
+
+          {govbrResult?.govbr && (
+            <div style={{ textAlign: "left", marginTop: 16, padding: 12, background: "#eef2ff", borderRadius: 8, fontSize: "0.85rem" }}>
+              <strong>🏛️ Gov.br</strong>
+              <p style={{ margin: "4px 0" }}>Nome: {govbrResult.govbr.name}</p>
+              <p style={{ margin: "4px 0" }}>CPF: {govbrResult.govbr.cpf}</p>
+              <p style={{ margin: "4px 0" }}>Nível: {govbrResult.govbr.nivel}</p>
+              <p style={{ margin: "4px 0" }}>Base legal: {govbrResult.govbr.legalBasis}</p>
+            </div>
+          )}
+
+          <div style={{ marginTop: 20 }}>
+            <button className="btn btn-primary" onClick={handleDownload} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              📥 Baixar documento assinado
+            </button>
+          </div>
+
           <p className="text-sm text-muted mt-16">
             Você pode fechar esta página.
           </p>
@@ -149,25 +261,44 @@ export default function SignPage() {
 
       <div className="card">
         <h2>Sua assinatura</h2>
+        <p className="text-sm text-muted" style={{ marginBottom: 16 }}>Escolha como deseja assinar o documento:</p>
 
         {error && <div className="alert alert-error">{error}</div>}
 
-        <div className="flex gap-8 mb-16">
+        {/* Method tabs */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 20 }}>
           <button
-            className={`btn ${signatureType === "draw" ? "btn-primary" : "btn-secondary"}`}
-            onClick={() => setSignatureType("draw")}
+            className={`btn ${signMethod === "draw" ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setSignMethod("draw")}
+            style={{ fontSize: "0.85rem" }}
           >
-            Desenhar
+            ✏️ Desenhar
           </button>
           <button
-            className={`btn ${signatureType === "type" ? "btn-primary" : "btn-secondary"}`}
-            onClick={() => setSignatureType("type")}
+            className={`btn ${signMethod === "type" ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setSignMethod("type")}
+            style={{ fontSize: "0.85rem" }}
           >
-            Digitar nome
+            ⌨️ Digitar
+          </button>
+          <button
+            className={`btn ${signMethod === "certificate" ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setSignMethod("certificate")}
+            style={{ fontSize: "0.85rem" }}
+          >
+            🔐 Certificado ICP-Brasil
+          </button>
+          <button
+            className={`btn ${signMethod === "govbr" ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setSignMethod("govbr")}
+            style={{ fontSize: "0.85rem" }}
+          >
+            🏛️ Gov.br
           </button>
         </div>
 
-        {signatureType === "draw" ? (
+        {/* ── Draw ─────────────────────────────────────── */}
+        {signMethod === "draw" && (
           <>
             <canvas
               ref={canvasRef}
@@ -186,32 +317,68 @@ export default function SignPage() {
             >
               Limpar
             </button>
+            <div className="mt-24">
+              <button
+                className="btn btn-primary"
+                style={{ width: "100%", padding: "14px" }}
+                onClick={handleSign}
+                disabled={signing}
+              >
+                {signing ? "Assinando…" : "Confirmar assinatura"}
+              </button>
+            </div>
           </>
-        ) : (
-          <div className="form-group">
-            <label>Nome completo</label>
-            <input
-              value={typedName}
-              onChange={(e) => setTypedName(e.target.value)}
-              placeholder={info.recipientName}
-              style={{ fontFamily: "'Brush Script MT', cursive", fontSize: "1.5rem" }}
-            />
-          </div>
         )}
 
-        <div className="mt-24">
-          <button
-            className="btn btn-primary"
-            style={{ width: "100%", padding: "14px" }}
-            onClick={handleSign}
-            disabled={signing}
-          >
-            {signing ? "Assinando…" : "Assinar documento"}
-          </button>
+        {/* ── Type ─────────────────────────────────────── */}
+        {signMethod === "type" && (
+          <>
+            <div className="form-group">
+              <label>Nome completo</label>
+              <input
+                value={typedName}
+                onChange={(e) => setTypedName(e.target.value)}
+                placeholder={info.recipientName}
+                style={{ fontFamily: "'Brush Script MT', cursive", fontSize: "1.5rem" }}
+              />
+            </div>
+            <div className="mt-24">
+              <button
+                className="btn btn-primary"
+                style={{ width: "100%", padding: "14px" }}
+                onClick={handleSign}
+                disabled={signing}
+              >
+                {signing ? "Assinando…" : "Confirmar assinatura"}
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ── Certificate ICP-Brasil ───────────────────── */}
+        {signMethod === "certificate" && (
+          <CertificateUpload
+            onCertificateReady={handleCertificateSign}
+            onCancel={() => setSignMethod("draw")}
+            loading={signing}
+          />
+        )}
+
+        {/* ── Gov.br ───────────────────────────────────── */}
+        {signMethod === "govbr" && (
+          <GovBrSign
+            onGovBrReady={handleGovBrSign}
+            onCancel={() => setSignMethod("draw")}
+            loading={signing}
+          />
+        )}
+
+        {(signMethod === "draw" || signMethod === "type") && (
           <p className="text-sm text-muted text-center mt-16">
-            Ao assinar, você concorda que esta assinatura eletrônica tem validade legal.
+            Ao assinar, você concorda que esta assinatura eletrônica tem validade legal
+            nos termos da Lei 14.063/2020.
           </p>
-        </div>
+        )}
       </div>
     </main>
   );

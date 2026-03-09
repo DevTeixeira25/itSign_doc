@@ -28,6 +28,7 @@ export type AuditAction =
   | "signature_completed"
   | "signature_declined"
   | "certificate_generated"
+  | "user_registered"
   | "user_login"
   | "user_logout";
 

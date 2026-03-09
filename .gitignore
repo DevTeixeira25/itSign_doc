@@ -3,11 +3,21 @@
 .turbo
 .next
 dist
+out
 coverage
 .env
 .env.*
 !.env.example
+!.env.production.example
+!.env.development
+!.env.production
 .dart_tool
 build
 # API storage (uploaded files, certs, signatures)
 apps/api/storage/
+
+# Firebase
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+ui-debug.log

@@ -1,7 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { authGuard } from "../../lib/auth-guard.js";
-import { uploadDocument, getDocument, listDocuments } from "./documents.service.js";
+import { uploadDocument, getDocument, listDocuments, getDocumentFile, getSignedDocumentFile } from "./documents.service.js";
 import { auditLog } from "../audit/audit.service.js";
+import { findInStore } from "../../lib/memory-store.js";
+import { sql, useMemory } from "../../db.js";
 
 export async function documentRoutes(app: FastifyInstance) {
   // ── Upload document ───────────────────────────────────────
@@ -58,6 +60,35 @@ export async function documentRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const doc = await getDocument(request.params.id, request.auth.organizationId);
       return reply.send(doc);
+    }
+  );
+
+  // ── Download document file (authenticated) ────────────────
+  app.get<{ Params: { id: string } }>(
+    "/v1/documents/:id/download",
+    { preHandler: [authGuard] },
+    async (request, reply) => {
+      const doc = await getDocument(request.params.id, request.auth.organizationId);
+
+      // Find the envelope for this document to embed signatures
+      let envelopeId: string | null = null;
+      if (useMemory) {
+        const envRows = findInStore("envelopes", (e: any) => e.document_id === doc.id && e.organization_id === doc.organizationId, 1);
+        if (envRows.length > 0) envelopeId = envRows[0].id;
+      } else {
+        const envRows = await sql`SELECT id FROM envelopes WHERE document_id = ${doc.id} AND organization_id = ${doc.organizationId} LIMIT 1`;
+        if (envRows.length > 0) envelopeId = envRows[0].id;
+      }
+
+      const buffer = envelopeId
+        ? await getSignedDocumentFile(doc.id, doc.organizationId, envelopeId)
+        : await getDocumentFile(doc.id, doc.organizationId);
+
+      return reply
+        .header("Content-Type", doc.mimeType || "application/pdf")
+        .header("Content-Disposition", `attachment; filename="${encodeURIComponent(doc.fileName)}"`)
+        .header("Content-Length", buffer.length)
+        .send(buffer);
     }
   );
 }

@@ -9,9 +9,14 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "test": "turbo run test",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "turbo run typecheck",
+    "deploy": "pnpm run build && firebase deploy",
+    "deploy:hosting": "pnpm --filter @itsign/web build && firebase deploy --only hosting",
+    "deploy:functions": "pnpm --filter @itsign/api build && firebase deploy --only functions",
+    "emulators": "firebase emulators:start"
   },
   "devDependencies": {
+    "firebase-tools": "^15.9.0",
     "turbo": "^2.5.0"
   }
 }

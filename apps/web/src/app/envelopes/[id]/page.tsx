@@ -42,7 +42,7 @@ export default function EnvelopeDetailPage() {
       return;
     }
     if (user && envelopeId) {
-      api.getEnvelope(envelopeId).then((data) => {
+      api.getEnvelope(envelopeId).then((data: any) => {
         setEnvelope(data);
         setLoading(false);
       });

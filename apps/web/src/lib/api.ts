@@ -57,6 +57,10 @@ class ApiClient {
     return this.request<any>("GET", "/v1/auth/me");
   }
 
+  updateProfile(data: { name?: string }) {
+    return this.request<any>("PATCH", "/v1/auth/me", data);
+  }
+
   // ── Documents ───────────────────────────────────────────
   uploadDocument(file: File) {
     const form = new FormData();

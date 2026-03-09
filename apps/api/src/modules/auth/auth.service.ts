@@ -60,6 +60,29 @@ export async function getUserById(userId: string) {
   return { id: r.id, organizationId: r.organization_id, name: r.name, email: r.email, createdAt: r.created_at };
 }
 
+export async function updateUser(userId: string, input: { name?: string }) {
+  if (useMemory) {
+    const rows = findInStore("users", (u) => u.id === userId, 1);
+    if (rows.length === 0) return null;
+    const updated = { ...rows[0], ...input };
+    updateInStore("users", (u) => u.id === userId, updated);
+    return { id: updated.id, organizationId: updated.organization_id, name: updated.name, email: updated.email, createdAt: updated.created_at };
+  }
+
+  const sets: string[] = [];
+  if (input.name) sets.push(`name`);
+  if (sets.length === 0) return getUserById(userId);
+
+  const rows = await sql`
+    UPDATE users SET name = COALESCE(${input.name ?? null}, name)
+    WHERE id = ${userId}
+    RETURNING id, organization_id, name, email, created_at
+  `;
+  if (rows.length === 0) return null;
+  const r = rows[0];
+  return { id: r.id, organizationId: r.organization_id, name: r.name, email: r.email, createdAt: r.created_at };
+}
+
 export async function getUserByEmail(email: string) {
   if (useMemory) {
     const rows = findInStore("users", (u) => u.email === email, 1);

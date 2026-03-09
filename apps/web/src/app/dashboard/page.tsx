@@ -47,6 +47,7 @@ export default function DashboardPage() {
           <Link href="/self-sign">Assinar</Link>
           <Link href="/envelopes/new">Enviar para assinatura</Link>
           <Link href="/verify/_">Verificar</Link>
+          <Link href="/profile">Perfil</Link>
           <button onClick={logout}>Sair</button>
         </nav>
       </header>

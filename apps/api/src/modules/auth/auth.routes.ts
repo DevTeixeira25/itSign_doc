@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { registerSchema } from "./auth.schemas.js";
-import { registerUser, getUserById, getUserByEmail } from "./auth.service.js";
+import { registerSchema, updateProfileSchema } from "./auth.schemas.js";
+import { registerUser, getUserById, getUserByEmail, updateUser } from "./auth.service.js";
 import { authGuard } from "../../lib/auth-guard.js";
 import { auditLog } from "../audit/audit.service.js";
 
@@ -57,6 +57,35 @@ export async function authRoutes(app: FastifyInstance) {
           .status(404)
           .send({ statusCode: 404, error: "Not Found", message: "Usuário não encontrado" });
       }
+      return reply.send(user);
+    }
+  );
+
+  // ── Update profile ────────────────────────────────────────
+  app.patch(
+    "/v1/auth/me",
+    { preHandler: [authGuard] },
+    async (request, reply) => {
+      if (!request.auth.userId) {
+        return reply.status(404).send({ statusCode: 404, error: "Not Found", message: "Usuário não encontrado" });
+      }
+
+      const body = updateProfileSchema.parse(request.body);
+      const user = await updateUser(request.auth.userId, body);
+
+      if (!user) {
+        return reply.status(404).send({ statusCode: 404, error: "Not Found", message: "Usuário não encontrado" });
+      }
+
+      await auditLog({
+        organizationId: request.auth.organizationId,
+        actorUserId: request.auth.userId,
+        actorEmail: request.auth.email,
+        action: "profile_updated",
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+
       return reply.send(user);
     }
   );

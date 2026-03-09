@@ -4,10 +4,12 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from "
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
   signOut,
   sendPasswordResetEmail,
+  updateProfile as fbUpdateProfile,
   type User as FirebaseUser,
 } from "firebase/auth";
 import { auth as firebaseAuth } from "./firebase";
@@ -19,8 +21,10 @@ interface AuthState {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
+  register: (name: string, email: string, password: string, organizationName: string) => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  updateProfile: (data: { name?: string }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -108,8 +112,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await sendPasswordResetEmail(firebaseAuth, email);
   };
 
+  const register = async (name: string, email: string, password: string, organizationName: string) => {
+    const cred = await createUserWithEmailAndPassword(firebaseAuth, email, password);
+    await fbUpdateProfile(cred.user, { displayName: name });
+    const idToken = await cred.user.getIdToken();
+    api.setToken(idToken);
+    const res = await api.register({ organizationName, name, email });
+    setUser(res.user);
+    setFirebaseUser(cred.user);
+  };
+
+  const updateUserProfile = async (data: { name?: string }) => {
+    const updated = await api.updateProfile(data);
+    setUser(updated);
+    if (data.name && firebaseUser) {
+      await fbUpdateProfile(firebaseUser, { displayName: data.name });
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, firebaseUser, loading, login, loginWithGoogle, logout, resetPassword }}>
+    <AuthContext.Provider value={{ user, firebaseUser, loading, login, loginWithGoogle, register, logout, resetPassword, updateProfile: updateUserProfile }}>
       {children}
     </AuthContext.Provider>
   );

@@ -18,7 +18,20 @@ class ApiClient {
     return h;
   }
 
-  async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  private async refreshAuthToken(): Promise<string | null> {
+    try {
+      const { auth } = await import("./firebase");
+      const currentUser = auth.currentUser;
+      if (!currentUser) return null;
+      const refreshedToken = await currentUser.getIdToken(true);
+      this.setToken(refreshedToken);
+      return refreshedToken;
+    } catch {
+      return null;
+    }
+  }
+
+  async request<T>(method: string, path: string, body?: unknown, allowRetry = true): Promise<T> {
     const contentHeaders: Record<string, string> =
       body != null && !(body instanceof FormData)
         ? { "Content-Type": "application/json" }
@@ -37,6 +50,12 @@ class ApiClient {
     } catch {
       if (!res.ok) throw new Error(`Erro ${res.status}: ${res.statusText}`);
       data = {};
+    }
+    if (res.status === 401 && this.getToken() && allowRetry) {
+      const refreshedToken = await this.refreshAuthToken();
+      if (refreshedToken) {
+        return this.request<T>(method, path, body, false);
+      }
     }
     if (!res.ok) {
       const msg = data?.message ?? data?.error ?? `Erro ${res.status}`;
@@ -66,6 +85,10 @@ class ApiClient {
     const form = new FormData();
     form.append("file", file);
     return this.request<any>("POST", "/v1/documents", form);
+  }
+
+  getDocumentFormFields(documentId: string) {
+    return this.request<{ data: any[] }>("GET", `/v1/documents/${documentId}/form-fields`);
   }
 
   listDocuments() {
@@ -130,7 +153,22 @@ class ApiClient {
     return this.request<any>("GET", `/v1/sign/${token}`);
   }
 
-  sign(token: string, input: { signatureData: string; signatureType: string; signaturePosition?: { page: number; x: number; y: number; width: number; height: number } }) {
+  sign(token: string, input: {
+    signatureData: string;
+    signatureType: string;
+    signaturePosition?: { page: number; x: number; y: number; width: number; height: number };
+    formFields?: Record<string, string | boolean | string[]>;
+    overlayFields?: Array<{
+      id?: string;
+      type: "text" | "check" | "cross" | "dot";
+      page: number;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      value?: string;
+    }>;
+  }) {
     return this.request<any>("POST", `/v1/sign/${token}`, input);
   }
 
@@ -148,6 +186,17 @@ class ApiClient {
     recipientToken: string;
     envelopeId: string;
     signaturePosition?: { page: number; x: number; y: number; width: number; height: number };
+    formFields?: Record<string, string | boolean | string[]>;
+    overlayFields?: Array<{
+      id?: string;
+      type: "text" | "check" | "cross" | "dot";
+      page: number;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      value?: string;
+    }>;
   }) {
     const form = new FormData();
     form.append("certificate", input.certificateFile);
@@ -156,6 +205,12 @@ class ApiClient {
     form.append("envelopeId", input.envelopeId);
     if (input.signaturePosition) {
       form.append("signaturePosition", JSON.stringify(input.signaturePosition));
+    }
+    if (input.formFields) {
+      form.append("formFields", JSON.stringify(input.formFields));
+    }
+    if (input.overlayFields) {
+      form.append("overlayFields", JSON.stringify(input.overlayFields));
     }
     return this.request<{
       signed: boolean;
@@ -207,7 +262,22 @@ class ApiClient {
     }>("GET", `/v1/govbr/session/${sessionId}`);
   }
 
-  govbrSign(sessionId: string, recipientToken: string, signaturePosition?: { page: number; x: number; y: number; width: number; height: number }) {
+  govbrSign(
+    sessionId: string,
+    recipientToken: string,
+    signaturePosition?: { page: number; x: number; y: number; width: number; height: number },
+    formFields?: Record<string, string | boolean | string[]>,
+    overlayFields?: Array<{
+      id?: string;
+      type: "text" | "check" | "cross" | "dot";
+      page: number;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      value?: string;
+    }>
+  ) {
     return this.request<{
       signed: boolean;
       envelopeCompleted: boolean;
@@ -220,11 +290,29 @@ class ApiClient {
         signatureLevel: string;
         legalBasis: string;
       };
-    }>("POST", `/v1/govbr/sign/${sessionId}`, { recipientToken, signaturePosition: signaturePosition ?? null });
+    }>("POST", `/v1/govbr/sign/${sessionId}`, {
+      recipientToken,
+      signaturePosition: signaturePosition ?? null,
+      formFields,
+      overlayFields,
+    });
   }
 
   /** Quick-sign: mock mode only (GOVBR_MOCK=true). For real mode, use govbrAuthorize + govbrSign */
-  govbrQuickSign(recipientToken: string) {
+  govbrQuickSign(
+    recipientToken: string,
+    formFields?: Record<string, string | boolean | string[]>,
+    overlayFields?: Array<{
+      id?: string;
+      type: "text" | "check" | "cross" | "dot";
+      page: number;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      value?: string;
+    }>
+  ) {
     return this.request<{
       signed: boolean;
       envelopeCompleted: boolean;
@@ -237,7 +325,7 @@ class ApiClient {
         signatureLevel: string;
         legalBasis: string;
       };
-    }>("POST", "/v1/govbr/quick-sign", { recipientToken });
+    }>("POST", "/v1/govbr/quick-sign", { recipientToken, formFields, overlayFields });
   }
 }
 

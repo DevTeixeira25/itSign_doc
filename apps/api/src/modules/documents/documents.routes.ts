@@ -1,6 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { authGuard } from "../../lib/auth-guard.js";
-import { uploadDocument, getDocument, listDocuments, getDocumentFile, getSignedDocumentFile } from "./documents.service.js";
+import {
+  uploadDocument,
+  getDocument,
+  listDocuments,
+  getDocumentFile,
+  getSignedDocumentFile,
+  getDocumentFormFields,
+} from "./documents.service.js";
 import { auditLog } from "../audit/audit.service.js";
 import { findInStore } from "../../lib/memory-store.js";
 import { sql, useMemory } from "../../db.js";
@@ -9,7 +16,14 @@ export async function documentRoutes(app: FastifyInstance) {
   // ── Upload document ───────────────────────────────────────
   app.post(
     "/v1/documents",
-    { preHandler: [authGuard] },
+    {
+      preHandler: [authGuard],
+      schema: {
+        tags: ["Documents"],
+        summary: "Upload de documento",
+        security: [{ firebaseBearerAuth: [] }],
+      },
+    },
     async (request, reply) => {
       const file = await request.file();
       if (!file) {
@@ -46,7 +60,14 @@ export async function documentRoutes(app: FastifyInstance) {
   // ── List documents ────────────────────────────────────────
   app.get(
     "/v1/documents",
-    { preHandler: [authGuard] },
+    {
+      preHandler: [authGuard],
+      schema: {
+        tags: ["Documents"],
+        summary: "Listar documentos",
+        security: [{ firebaseBearerAuth: [] }],
+      },
+    },
     async (request, reply) => {
       const docs = await listDocuments(request.auth.organizationId);
       return reply.send({ data: docs });
@@ -56,17 +77,48 @@ export async function documentRoutes(app: FastifyInstance) {
   // ── Get single document ───────────────────────────────────
   app.get<{ Params: { id: string } }>(
     "/v1/documents/:id",
-    { preHandler: [authGuard] },
+    {
+      preHandler: [authGuard],
+      schema: {
+        tags: ["Documents"],
+        summary: "Consultar documento",
+        security: [{ firebaseBearerAuth: [] }],
+      },
+    },
     async (request, reply) => {
       const doc = await getDocument(request.params.id, request.auth.organizationId);
       return reply.send(doc);
     }
   );
 
+  app.get<{ Params: { id: string } }>(
+    "/v1/documents/:id/form-fields",
+    {
+      preHandler: [authGuard],
+      schema: {
+        tags: ["Documents"],
+        summary: "Detectar campos preenchiveis do PDF",
+        security: [{ firebaseBearerAuth: [] }],
+      },
+    },
+    async (request, reply) => {
+      const doc = await getDocument(request.params.id, request.auth.organizationId);
+      const fields = await getDocumentFormFields(doc.id, doc.organizationId);
+      return reply.send({ data: fields });
+    }
+  );
+
   // ── Download document file (authenticated) ────────────────
   app.get<{ Params: { id: string } }>(
     "/v1/documents/:id/download",
-    { preHandler: [authGuard] },
+    {
+      preHandler: [authGuard],
+      schema: {
+        tags: ["Documents"],
+        summary: "Baixar documento",
+        security: [{ firebaseBearerAuth: [] }],
+      },
+    },
     async (request, reply) => {
       const doc = await getDocument(request.params.id, request.auth.organizationId);
 

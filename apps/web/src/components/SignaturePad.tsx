@@ -25,6 +25,10 @@ export default function SignaturePad({
   const [mode, setMode] = useState<"draw" | "type">("draw");
   const [typedName, setTypedName] = useState("");
 
+  function getSignatureColor() {
+    return document.documentElement.dataset.theme === "dark" ? "#ffffff" : "#0f172a";
+  }
+
   function startDraw(e: React.PointerEvent) {
     isDrawing.current = true;
     setHasDrawn(true);
@@ -50,7 +54,7 @@ export default function SignaturePad({
     ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.strokeStyle = "#0f172a";
+    ctx.strokeStyle = getSignatureColor();
     ctx.lineTo(
       (e.clientX - rect.left) * scaleX,
       (e.clientY - rect.top) * scaleY
@@ -69,10 +73,31 @@ export default function SignaturePad({
     setHasDrawn(false);
   }
 
+  function exportSignatureAsBlack(canvas: HTMLCanvasElement) {
+    const output = document.createElement("canvas");
+    output.width = canvas.width;
+    output.height = canvas.height;
+    const sourceCtx = canvas.getContext("2d")!;
+    const targetCtx = output.getContext("2d")!;
+    const imageData = sourceCtx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3] > 0) {
+        data[i] = 15;
+        data[i + 1] = 23;
+        data[i + 2] = 42;
+      }
+    }
+
+    targetCtx.putImageData(imageData, 0, 0);
+    return output.toDataURL("image/png");
+  }
+
   function handleSave() {
     if (mode === "draw") {
       if (!hasDrawn) return;
-      const dataUrl = canvasRef.current?.toDataURL("image/png") ?? "";
+      const dataUrl = canvasRef.current ? exportSignatureAsBlack(canvasRef.current) : "";
       onSave(dataUrl);
     } else {
       if (!typedName.trim()) return;

@@ -52,3 +52,12 @@ flutter run
 2. Upload de PDF e hash SHA-256.
 3. Fluxo de envelope com assinatura por ordem.
 4. Trilha de auditoria e certificado de conclusao.
+
+## Documentacao
+
+- Setup local: `docs/01-setup.md`
+- Arquitetura: `docs/02-arquitetura.md`
+- Sprint 1: `docs/03-sprint-1.md`
+- API para integracao: `docs/04-api-integracao.md`
+- Setup mobile: `docs/05-mobile-setup.md`
+- Swagger UI (API local): `http://localhost:3001/docs`

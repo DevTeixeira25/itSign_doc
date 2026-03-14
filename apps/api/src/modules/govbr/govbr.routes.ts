@@ -23,7 +23,14 @@ export async function govbrRoutes(app: FastifyInstance) {
   // ── 1. Initiate Gov.br OAuth2 flow (authenticated) ──────────
   app.post(
     "/v1/govbr/authorize",
-    { preHandler: [authGuard] },
+    {
+      preHandler: [authGuard],
+      schema: {
+        tags: ["GovBr"],
+        summary: "Iniciar fluxo autenticado Gov.br",
+        security: [{ firebaseBearerAuth: [] }],
+      },
+    },
     async (request, reply) => {
       const auth = request.auth;
       const body = request.body as any;
@@ -46,6 +53,12 @@ export async function govbrRoutes(app: FastifyInstance) {
   // ── 1b. Initiate Gov.br OAuth2 flow (public — for recipients) ──
   app.post(
     "/v1/govbr/public-authorize",
+    {
+      schema: {
+        tags: ["GovBr"],
+        summary: "Iniciar fluxo publico Gov.br",
+      },
+    },
     async (request, reply) => {
       const body = request.body as any;
       const recipientToken = body?.recipientToken;
@@ -83,6 +96,12 @@ export async function govbrRoutes(app: FastifyInstance) {
   // Gov.br redirects here after user authenticates
   app.get<{ Querystring: { code?: string; state?: string; error?: string } }>(
     "/v1/govbr/callback",
+    {
+      schema: {
+        tags: ["GovBr"],
+        summary: "Callback OAuth2 do Gov.br",
+      },
+    },
     async (request, reply) => {
       const { code, state, error: oauthError } = request.query;
 
@@ -113,6 +132,12 @@ export async function govbrRoutes(app: FastifyInstance) {
   // ── 3. Get Gov.br session status (no auth required — session ID is the secret) ──
   app.get<{ Params: { sessionId: string } }>(
     "/v1/govbr/session/:sessionId",
+    {
+      schema: {
+        tags: ["GovBr"],
+        summary: "Consultar sessao Gov.br",
+      },
+    },
     async (request, reply) => {
       const session = getGovBrSession(request.params.sessionId);
       if (!session) throw new NotFoundError("Sessão Gov.br não encontrada ou expirada");
@@ -137,6 +162,12 @@ export async function govbrRoutes(app: FastifyInstance) {
   // This allows both authenticated users and public recipients to sign.
   app.post<{ Params: { sessionId: string } }>(
     "/v1/govbr/sign/:sessionId",
+    {
+      schema: {
+        tags: ["GovBr"],
+        summary: "Concluir assinatura com Gov.br",
+      },
+    },
     async (request, reply) => {
       const session = getGovBrSession(request.params.sessionId);
       if (!session) throw new NotFoundError("Sessão Gov.br não encontrada ou expirada");
@@ -150,6 +181,8 @@ export async function govbrRoutes(app: FastifyInstance) {
       const body = request.body as any;
       const recipientToken = body?.recipientToken;
       const signaturePosition = body?.signaturePosition ?? null;
+      const formFields = body?.formFields ?? {};
+      const overlayFields = body?.overlayFields ?? [];
 
       if (!recipientToken) throw new BadRequestError("Token do destinatário é obrigatório");
 
@@ -217,6 +250,8 @@ export async function govbrRoutes(app: FastifyInstance) {
             recipientEmail: recipient.email,
             signatureType: "govbr",
             signaturePosition,
+            formFields,
+            overlayFields,
             signedAt,
             ipAddress: request.ip,
             userAgent: request.headers["user-agent"] ?? null,
@@ -320,7 +355,14 @@ export async function govbrRoutes(app: FastifyInstance) {
   //   3) Web callback page calls POST /v1/govbr/sign/:sessionId
   app.post(
     "/v1/govbr/quick-sign",
-    { preHandler: [authGuard] },
+    {
+      preHandler: [authGuard],
+      schema: {
+        tags: ["GovBr"],
+        summary: "Assinatura rapida Gov.br em modo mock",
+        security: [{ firebaseBearerAuth: [] }],
+      },
+    },
     async (request, reply) => {
       if (!GOVBR_MOCK_MODE) {
         throw new BadRequestError(
@@ -332,6 +374,8 @@ export async function govbrRoutes(app: FastifyInstance) {
       const auth = request.auth;
       const body = request.body as any;
       const recipientToken = body?.recipientToken;
+      const formFields = body?.formFields ?? {};
+      const overlayFields = body?.overlayFields ?? [];
 
       if (!recipientToken) throw new BadRequestError("Token do destinatário é obrigatório");
 
@@ -399,6 +443,8 @@ export async function govbrRoutes(app: FastifyInstance) {
           recipientEmail: recipient.email,
           signatureType: "govbr",
           signaturePosition: null,
+          formFields,
+          overlayFields,
           signedAt,
           ipAddress: request.ip,
           userAgent: request.headers["user-agent"] ?? null,

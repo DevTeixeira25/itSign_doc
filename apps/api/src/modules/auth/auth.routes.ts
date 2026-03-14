@@ -10,7 +10,14 @@ export async function authRoutes(app: FastifyInstance) {
   // endpoint with the Firebase ID token to create org + local user.
   app.post(
     "/v1/auth/register",
-    { preHandler: [authGuard] },
+    {
+      preHandler: [authGuard],
+      schema: {
+        tags: ["Auth"],
+        summary: "Registrar usuario local",
+        security: [{ firebaseBearerAuth: [] }],
+      },
+    },
     async (request, reply) => {
       const body = registerSchema.parse(request.body);
       const firebaseUid = request.auth.firebaseUid;
@@ -41,7 +48,14 @@ export async function authRoutes(app: FastifyInstance) {
   // ── Me (profile) ──────────────────────────────────────────
   app.get(
     "/v1/auth/me",
-    { preHandler: [authGuard] },
+    {
+      preHandler: [authGuard],
+      schema: {
+        tags: ["Auth"],
+        summary: "Consultar perfil autenticado",
+        security: [{ firebaseBearerAuth: [] }],
+      },
+    },
     async (request, reply) => {
       // First try by userId, then by email (for users who just registered)
       let user = request.auth.userId
@@ -64,7 +78,14 @@ export async function authRoutes(app: FastifyInstance) {
   // ── Update profile ────────────────────────────────────────
   app.patch(
     "/v1/auth/me",
-    { preHandler: [authGuard] },
+    {
+      preHandler: [authGuard],
+      schema: {
+        tags: ["Auth"],
+        summary: "Atualizar perfil",
+        security: [{ firebaseBearerAuth: [] }],
+      },
+    },
     async (request, reply) => {
       if (!request.auth.userId) {
         return reply.status(404).send({ statusCode: 404, error: "Not Found", message: "Usuário não encontrado" });

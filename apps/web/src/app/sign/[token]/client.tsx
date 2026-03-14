@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from "react";
 import { api } from "../../../lib/api";
 import CertificateUpload from "../../../components/CertificateUpload";
 import GovBrSign from "../../../components/GovBrSign";
+import PdfFormFieldsEditor, { type PdfFormFieldDefinition } from "../../../components/PdfFormFieldsEditor";
 
 type SignMethod = "draw" | "type" | "certificate" | "govbr";
 
@@ -20,6 +21,8 @@ export default function SignPage() {
   const [error, setError] = useState("");
   const [signMethod, setSignMethod] = useState<SignMethod>("draw");
   const [typedName, setTypedName] = useState("");
+  const [formFields, setFormFields] = useState<PdfFormFieldDefinition[]>([]);
+  const [formValues, setFormValues] = useState<Record<string, string | boolean | string[]>>({});
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawing = useRef(false);
 
@@ -27,12 +30,19 @@ export default function SignPage() {
   const [certResult, setCertResult] = useState<any>(null);
   const [govbrResult, setGovbrResult] = useState<any>(null);
 
+  function getSignatureColor() {
+    return document.documentElement.dataset.theme === "dark" ? "#ffffff" : "#0f172a";
+  }
+
   useEffect(() => {
     api
       .getSigningInfo(token)
       .then((data: any) => {
         setInfo(data);
         if (data.alreadySigned) setDone(true);
+        const fields = (data.formFields ?? []) as PdfFormFieldDefinition[];
+        setFormFields(fields);
+        setFormValues(Object.fromEntries(fields.flatMap((field) => field.value != null ? [[field.name, field.value]] : [])));
       })
       .catch((err: any) => setError(err.message ?? "Link inválido"))
       .finally(() => setLoading(false));
@@ -55,7 +65,7 @@ export default function SignPage() {
     const rect = canvas.getBoundingClientRect();
     ctx.lineWidth = 2;
     ctx.lineCap = "round";
-    ctx.strokeStyle = "#0f172a";
+    ctx.strokeStyle = getSignatureColor();
     ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
     ctx.stroke();
   }
@@ -70,6 +80,27 @@ export default function SignPage() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
 
+  function exportSignatureAsBlack(canvas: HTMLCanvasElement) {
+    const output = document.createElement("canvas");
+    output.width = canvas.width;
+    output.height = canvas.height;
+    const sourceCtx = canvas.getContext("2d")!;
+    const targetCtx = output.getContext("2d")!;
+    const imageData = sourceCtx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3] > 0) {
+        data[i] = 15;
+        data[i + 1] = 23;
+        data[i + 2] = 42;
+      }
+    }
+
+    targetCtx.putImageData(imageData, 0, 0);
+    return output.toDataURL("image/png");
+  }
+
   // ── Electronic sign (draw / type) ──────────────────────
   async function handleSign() {
     setError("");
@@ -77,7 +108,7 @@ export default function SignPage() {
 
     let signatureData = "";
     if (signMethod === "draw") {
-      signatureData = canvasRef.current?.toDataURL("image/png") ?? "";
+      signatureData = canvasRef.current ? exportSignatureAsBlack(canvasRef.current) : "";
       if (!signatureData || signatureData === "data:,") {
         setError("Desenhe sua assinatura");
         setSigning(false);
@@ -93,7 +124,11 @@ export default function SignPage() {
     }
 
     try {
-      await api.sign(token, { signatureData, signatureType: signMethod });
+      await api.sign(token, {
+        signatureData,
+        signatureType: signMethod,
+        formFields: normalizeFormValues(formValues),
+      });
       setDone(true);
     } catch (err: any) {
       setError(err.message ?? "Erro ao assinar");
@@ -112,6 +147,7 @@ export default function SignPage() {
         password: certPassword,
         recipientToken: token,
         envelopeId: info?.envelopeId ?? "",
+        formFields: normalizeFormValues(),
       });
       setCertResult(result);
       setDone(true);
@@ -127,6 +163,7 @@ export default function SignPage() {
     setError("");
     setSigning(true);
     try {
+      sessionStorage.setItem("sign_form_values", JSON.stringify(normalizeFormValues(formValues)));
       // Start Gov.br OAuth2 flow using public-authorize (no login needed)
       const { authUrl } = await api.govbrPublicAuthorize({
         recipientToken: token,
@@ -144,21 +181,24 @@ export default function SignPage() {
   useEffect(() => {
     const govbrSessionId = searchParams.get("govbr_session");
     if (!govbrSessionId) return;
+    const savedFormValues = typeof window !== "undefined" ? sessionStorage.getItem("sign_form_values") : null;
+    const parsedFormValues = savedFormValues ? JSON.parse(savedFormValues) : normalizeFormValues(formValues);
 
     (async () => {
       setSigning(true);
       setError("");
       try {
-        const result = await api.govbrSign(govbrSessionId, token);
+        const result = await api.govbrSign(govbrSessionId, token, undefined, parsedFormValues);
         setGovbrResult(result);
         setDone(true);
+        sessionStorage.removeItem("sign_form_values");
       } catch (err: any) {
         setError(err.message ?? "Erro ao assinar com Gov.br");
       } finally {
         setSigning(false);
       }
     })();
-  }, [searchParams, token]);
+  }, [searchParams, token, formValues]);
 
   async function handleDownload() {
     try {
@@ -264,6 +304,16 @@ export default function SignPage() {
         <p className="text-sm text-muted" style={{ marginBottom: 16 }}>Escolha como deseja assinar o documento:</p>
 
         {error && <div className="alert alert-error">{error}</div>}
+
+        {formFields.length > 0 && (
+          <div style={{ marginBottom: 20 }}>
+            <PdfFormFieldsEditor
+              fields={formFields}
+              values={formValues}
+              onChange={setFormValues}
+            />
+          </div>
+        )}
 
         {/* Method tabs */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 20 }}>
@@ -381,5 +431,16 @@ export default function SignPage() {
         )}
       </div>
     </main>
+  );
+}
+
+function normalizeFormValues(values?: Record<string, string | boolean | string[]>) {
+  const source = values ?? {};
+  return Object.fromEntries(
+    Object.entries(source).filter(([, value]) => {
+      if (typeof value === "string") return value.trim().length > 0;
+      if (Array.isArray(value)) return value.length > 0;
+      return true;
+    })
   );
 }

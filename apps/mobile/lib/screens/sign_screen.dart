@@ -1,9 +1,8 @@
 import "dart:convert";
-import "dart:typed_data";
-import "dart:ui" as ui;
 import "package:flutter/material.dart";
 import "package:signature/signature.dart";
 import "../services/api_service.dart";
+import "../widgets/pdf_form_fields_editor.dart";
 
 class SignScreen extends StatefulWidget {
   final String token;
@@ -22,6 +21,8 @@ class _SignScreenState extends State<SignScreen> {
   String? _error;
   String _mode = "draw"; // "draw" or "type"
   final _nameCtrl = TextEditingController();
+  List<PdfFormFieldDefinition> _formFields = const [];
+  Map<String, Object> _formValues = <String, Object>{};
 
   final SignatureController _signatureCtrl = SignatureController(
     penStrokeWidth: 3,
@@ -43,6 +44,14 @@ class _SignScreenState extends State<SignScreen> {
           _info = data;
           _loading = false;
           if (data["alreadySigned"] == true) _done = true;
+          _formFields = (data["formFields"] as List<dynamic>? ?? const <dynamic>[])
+              .whereType<Map<String, dynamic>>()
+              .map(PdfFormFieldDefinition.fromJson)
+              .toList();
+          _formValues = {
+            for (final field in _formFields)
+              if (field.value != null) field.name: field.value!,
+          };
         });
       }
     } catch (e) {
@@ -87,6 +96,7 @@ class _SignScreenState extends State<SignScreen> {
         widget.token,
         signatureData: signatureData,
         signatureType: signatureType,
+        formFields: _normalizedFormValues(),
       );
       if (mounted) setState(() { _done = true; });
     } catch (e) {
@@ -183,6 +193,20 @@ class _SignScreenState extends State<SignScreen> {
             ),
             const SizedBox(height: 16),
 
+            if (_formFields.isNotEmpty) ...[
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: PdfFormFieldsEditor(
+                    fields: _formFields,
+                    values: _formValues,
+                    onChanged: (next) => setState(() => _formValues = next),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
             if (_error != null)
               Container(
                 width: double.infinity,
@@ -206,7 +230,7 @@ class _SignScreenState extends State<SignScreen> {
                     label: const Text("Desenhar"),
                     style: _mode == "draw"
                         ? OutlinedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2563EB).withOpacity(0.1),
+                            backgroundColor: const Color(0xFF2563EB).withValues(alpha: 0.1),
                             side: const BorderSide(color: Color(0xFF2563EB)),
                           )
                         : null,
@@ -220,7 +244,7 @@ class _SignScreenState extends State<SignScreen> {
                     label: const Text("Digitar"),
                     style: _mode == "type"
                         ? OutlinedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2563EB).withOpacity(0.1),
+                            backgroundColor: const Color(0xFF2563EB).withValues(alpha: 0.1),
                             side: const BorderSide(color: Color(0xFF2563EB)),
                           )
                         : null,
@@ -298,5 +322,16 @@ class _SignScreenState extends State<SignScreen> {
     _signatureCtrl.dispose();
     _nameCtrl.dispose();
     super.dispose();
+  }
+
+  Map<String, dynamic> _normalizedFormValues() {
+    final result = <String, dynamic>{};
+    for (final entry in _formValues.entries) {
+      final value = entry.value;
+      if (value is String && value.trim().isEmpty) continue;
+      if (value is List && value.isEmpty) continue;
+      result[entry.key] = value;
+    }
+    return result;
   }
 }

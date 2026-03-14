@@ -17,7 +17,12 @@ import { NotFoundError, BadRequestError, ForbiddenError } from "../../lib/errors
 
 export async function certificateRoutes(app: FastifyInstance) {
   // ── Validate certificate (no signing — just inspect) ──────────
-  app.post("/v1/certificates/validate", async (request, reply) => {
+  app.post("/v1/certificates/validate", {
+    schema: {
+      tags: ["Certificates"],
+      summary: "Validar certificado digital",
+    },
+  }, async (request, reply) => {
     const data = await request.file();
     if (!data) throw new BadRequestError("Envie o arquivo .pfx/.p12 do certificado");
 
@@ -46,7 +51,12 @@ export async function certificateRoutes(app: FastifyInstance) {
 
   // ── Sign with certificate (self-sign flow) ────────────────────
   // This receives: .pfx file, password, documentId or envelopeId
-  app.post("/v1/sign-with-certificate", async (request, reply) => {
+  app.post("/v1/sign-with-certificate", {
+    schema: {
+      tags: ["Certificates"],
+      summary: "Assinar com certificado digital",
+    },
+  }, async (request, reply) => {
     // We need multipart: certificate file + password + envelope info
     const parts = request.parts();
     let pfxBuffer: Buffer | null = null;
@@ -54,6 +64,8 @@ export async function certificateRoutes(app: FastifyInstance) {
     let envelopeId = "";
     let recipientToken = "";
     let signaturePosition: { page: number; x: number; y: number; width: number; height: number } | null = null;
+    let formFields: Record<string, string | boolean | string[]> = {};
+    let overlayFields: Array<{ id?: string; type: "text" | "check" | "cross" | "dot"; page: number; x: number; y: number; width: number; height: number; value?: string }> = [];
 
     for await (const part of parts) {
       if (part.type === "file" && part.fieldname === "certificate") {
@@ -64,6 +76,12 @@ export async function certificateRoutes(app: FastifyInstance) {
         if (part.fieldname === "recipientToken") recipientToken = part.value as string;
         if (part.fieldname === "signaturePosition") {
           try { signaturePosition = JSON.parse(part.value as string); } catch { /* ignore */ }
+        }
+        if (part.fieldname === "formFields") {
+          try { formFields = JSON.parse(part.value as string); } catch { /* ignore */ }
+        }
+        if (part.fieldname === "overlayFields") {
+          try { overlayFields = JSON.parse(part.value as string); } catch { /* ignore */ }
         }
       }
     }
@@ -159,6 +177,8 @@ export async function certificateRoutes(app: FastifyInstance) {
           recipientEmail: recipient.email,
           signatureType: "certificate_icp",
           signaturePosition: signaturePosition ?? null,
+          formFields,
+          overlayFields,
           signedAt,
           ipAddress: request.ip,
           userAgent: request.headers["user-agent"] ?? null,

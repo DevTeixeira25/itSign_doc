@@ -17,4 +17,9 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+if (typeof window !== "undefined") {
+  (window as Window & { __ITSIGN_AUTH__?: typeof auth }).__ITSIGN_AUTH__ = auth;
+}
+
 export default app;

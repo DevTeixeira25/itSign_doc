@@ -79,21 +79,13 @@ export default function VerifyPage() {
           <div className="card">
             {/* Status banner */}
             <div
-              className="verify-status-banner"
-              style={{
-                background: result.valid ? "#dcfce7" : "#fef2f2",
-                border: `2px solid ${result.valid ? "#22c55e" : "#ef4444"}`,
-                borderRadius: 12,
-                padding: "20px 24px",
-                textAlign: "center",
-                marginBottom: 24,
-              }}
+              className={`verify-status-banner ${result.valid ? "is-valid" : "is-invalid"}`}
             >
               <div style={{ fontSize: "2rem" }}>{result.valid ? "✅" : "❌"}</div>
-              <h2 style={{ color: result.valid ? "#166534" : "#991b1b", margin: "8px 0 4px" }}>
+              <h2 style={{ margin: "8px 0 4px" }}>
                 {result.valid ? "Documento Válido" : "Verificação Falhou"}
               </h2>
-              <p style={{ color: result.valid ? "#15803d" : "#b91c1c", margin: 0, fontSize: "0.9rem" }}>
+              <p style={{ margin: 0, fontSize: "0.9rem" }}>
                 {result.valid
                   ? "A integridade do documento e das assinaturas foi verificada com sucesso."
                   : "O certificado pode ter sido adulterado. A integridade não pôde ser confirmada."}
@@ -132,14 +124,7 @@ export default function VerifyPage() {
                   <tr>
                     <td className="verify-label">Verificação de integridade</td>
                     <td>
-                      <span style={{
-                        background: result.integrityCheck === "PASS" ? "#dcfce7" : "#fef2f2",
-                        color: result.integrityCheck === "PASS" ? "#166534" : "#991b1b",
-                        padding: "2px 10px",
-                        borderRadius: 6,
-                        fontWeight: 600,
-                        fontSize: "0.85rem",
-                      }}>
+                      <span className={`verify-pill ${result.integrityCheck === "PASS" ? "is-valid" : "is-invalid"}`}>
                         {result.integrityCheck === "PASS" ? "✓ APROVADA" : "✗ REPROVADA"}
                       </span>
                     </td>
@@ -176,26 +161,11 @@ export default function VerifyPage() {
                 {result.signatures.map((sig: any, i: number) => (
                   <div
                     key={i}
-                    style={{
-                      border: "1px solid #e5e7eb",
-                      borderRadius: 8,
-                      padding: 16,
-                      marginBottom: 12,
-                      background: "#fafafa",
-                    }}
+                    className="verify-signer-card"
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                       <strong>{sig.name}</strong>
-                      <span
-                        style={{
-                          background: "#dcfce7",
-                          color: "#166534",
-                          padding: "2px 10px",
-                          borderRadius: 6,
-                          fontSize: "0.8rem",
-                          fontWeight: 600,
-                        }}
-                      >
+                      <span className="verify-pill is-valid">
                         ✓ Assinado
                       </span>
                     </div>
@@ -324,12 +294,7 @@ export default function VerifyPage() {
             {result.legalBasis && (
               <div className="verify-section" style={{ marginTop: 24 }}>
                 <h3>⚖️ Fundamento Legal</h3>
-                <div style={{
-                  background: result.legalBasis.icpBrasil ? "#f0fdf4" : "#eff6ff",
-                  border: `1px solid ${result.legalBasis.icpBrasil ? "#86efac" : "#bfdbfe"}`,
-                  borderRadius: 8,
-                  padding: 16,
-                }}>
+                <div className={`verify-legal-box ${result.legalBasis.icpBrasil ? "is-icp" : "is-default"}`}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                     <p style={{ margin: 0, fontWeight: 600 }}>
                       {result.legalBasis.law} — {result.legalBasis.article}
@@ -343,7 +308,7 @@ export default function VerifyPage() {
                   <p style={{ margin: "0 0 8px", fontWeight: 500, fontSize: "0.9rem" }}>
                     {result.legalBasis.complementary}
                   </p>
-                  <p style={{ margin: 0, fontSize: "0.85rem", color: "#374151" }}>
+                  <p className="verify-legal-description" style={{ margin: 0, fontSize: "0.85rem" }}>
                     {result.legalBasis.description}
                   </p>
                 </div>
@@ -351,7 +316,7 @@ export default function VerifyPage() {
             )}
 
             {/* Footer */}
-            <div style={{ marginTop: 24, textAlign: "center", color: "#6b7280", fontSize: "0.8rem" }}>
+            <div className="verify-footer">
               <p>Verificação realizada na plataforma <strong>{result.platform ?? "ITSign"}</strong></p>
               <p>A autenticidade deste documento pode ser verificada a qualquer momento usando o código acima.</p>
             </div>

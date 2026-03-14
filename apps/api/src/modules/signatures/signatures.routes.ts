@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { signSchema } from "./signatures.schemas.js";
-import { getRecipientByToken, signByToken } from "./signatures.service.js";
+import { getRecipientByToken, getSigningFormFields, signByToken } from "./signatures.service.js";
 import { auditLog } from "../audit/audit.service.js";
 import { getSignedDocumentFile } from "../documents/documents.service.js";
 import { findInStore } from "../../lib/memory-store.js";
@@ -10,6 +10,12 @@ export async function signatureRoutes(app: FastifyInstance) {
   // ── Get signing info (public – token-based) ───────────────
   app.get<{ Params: { token: string } }>(
     "/v1/sign/:token",
+    {
+      schema: {
+        tags: ["Signatures"],
+        summary: "Consultar contexto de assinatura publica",
+      },
+    },
     async (request, reply) => {
       const recipient = await getRecipientByToken(request.params.token);
 
@@ -23,6 +29,8 @@ export async function signatureRoutes(app: FastifyInstance) {
         metadata: { recipientId: recipient.id },
       });
 
+      const formFields = await getSigningFormFields(request.params.token);
+
       return reply.send({
         recipientId: recipient.id,
         recipientName: recipient.name,
@@ -32,6 +40,7 @@ export async function signatureRoutes(app: FastifyInstance) {
         documentFileName: recipient.file_name,
         envelopeStatus: recipient.envelope_status,
         alreadySigned: !!recipient.signed_at,
+        formFields,
       });
     }
   );
@@ -39,6 +48,12 @@ export async function signatureRoutes(app: FastifyInstance) {
   // ── Sign document (public – token-based) ──────────────────
   app.post<{ Params: { token: string } }>(
     "/v1/sign/:token",
+    {
+      schema: {
+        tags: ["Signatures"],
+        summary: "Assinar documento por token publico",
+      },
+    },
     async (request, reply) => {
       const body = signSchema.parse(request.body);
       const result = await signByToken(request.params.token, body, {
@@ -52,6 +67,12 @@ export async function signatureRoutes(app: FastifyInstance) {
   // ── Download signed document (public – token-based) ───────
   app.get<{ Params: { token: string } }>(
     "/v1/sign/:token/download",
+    {
+      schema: {
+        tags: ["Signatures"],
+        summary: "Baixar PDF assinado por token publico",
+      },
+    },
     async (request, reply) => {
       const recipient = await getRecipientByToken(request.params.token);
 

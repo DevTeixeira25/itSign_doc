@@ -6,6 +6,12 @@ export async function verificationRoutes(app: FastifyInstance) {
   // ── Public: verify a signed document by code ──────────────
   app.get<{ Params: { code: string } }>(
     "/v1/verify/:code",
+    {
+      schema: {
+        tags: ["Verification"],
+        summary: "Verificar documento por codigo publico",
+      },
+    },
     async (request, reply) => {
       const result = await verifyByCode(request.params.code);
       return reply.send(result);
@@ -15,7 +21,14 @@ export async function verificationRoutes(app: FastifyInstance) {
   // ── Authenticated: get verification code for an envelope ──
   app.get<{ Params: { id: string } }>(
     "/v1/envelopes/:id/verification",
-    { preHandler: [authGuard] },
+    {
+      preHandler: [authGuard],
+      schema: {
+        tags: ["Verification"],
+        summary: "Obter codigo de verificacao do envelope",
+        security: [{ firebaseBearerAuth: [] }],
+      },
+    },
     async (request, reply) => {
       const code = await getVerificationCode(request.params.id);
       if (!code) {

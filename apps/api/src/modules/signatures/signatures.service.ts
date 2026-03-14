@@ -7,6 +7,7 @@ import { auditLog, addSignatureEvent } from "../audit/audit.service.js";
 import { config } from "../../config.js";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { getDocumentFormFields } from "../documents/documents.service.js";
 
 export async function getRecipientByToken(rawToken: string) {
   const tokenHash = sha256(rawToken);
@@ -42,7 +43,22 @@ export async function getRecipientByToken(rawToken: string) {
 
 export async function signByToken(
   rawToken: string,
-  input: { signatureData: string; signatureType: string; signaturePosition?: { page: number; x: number; y: number; width: number; height: number } },
+  input: {
+    signatureData: string;
+    signatureType: string;
+    signaturePosition?: { page: number; x: number; y: number; width: number; height: number };
+    formFields?: Record<string, string | boolean | string[]>;
+    overlayFields?: Array<{
+      id?: string;
+      type: "text" | "check" | "cross" | "dot";
+      page: number;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      value?: string;
+    }>;
+  },
   meta: { ipAddress: string; userAgent: string | null }
 ) {
   const recipient = await getRecipientByToken(rawToken);
@@ -100,6 +116,8 @@ export async function signByToken(
     signatureData: input.signatureData,
     signatureType: input.signatureType,
     signaturePosition: input.signaturePosition ?? null,
+    formFields: input.formFields ?? {},
+    overlayFields: input.overlayFields ?? [],
     signedAt,
     ipAddress: meta.ipAddress,
     userAgent: meta.userAgent,
@@ -152,6 +170,12 @@ export async function signByToken(
   }
 
   return { signed: true, envelopeCompleted: completed, recipientId: recipient.id };
+}
+
+export async function getSigningFormFields(rawToken: string) {
+  const recipient = await getRecipientByToken(rawToken);
+  const documentContext = await getEnvelopeDocumentContext(recipient.envelope_id, recipient.organization_id);
+  return getDocumentFormFields(documentContext.documentId, recipient.organization_id);
 }
 
 async function generateCompletionCertificate(envelopeId: string, organizationId: string) {
@@ -295,6 +319,23 @@ async function getDocumentHashForEnvelope(envelopeId: string): Promise<string> {
     WHERE e.id = ${envelopeId} LIMIT 1
   `;
   return rows[0]?.sha256_hash ?? "unknown";
+}
+
+async function getEnvelopeDocumentContext(envelopeId: string, organizationId: string): Promise<{ documentId: string }> {
+  if (useMemory) {
+    const env = findInStore("envelopes", (e) => e.id === envelopeId && e.organization_id === organizationId, 1)[0];
+    if (!env) throw new NotFoundError("Envelope");
+    return { documentId: env.document_id };
+  }
+
+  const rows = await sql`
+    SELECT document_id
+    FROM envelopes
+    WHERE id = ${envelopeId} AND organization_id = ${organizationId}
+    LIMIT 1
+  `;
+  if (rows.length === 0) throw new NotFoundError("Envelope");
+  return { documentId: rows[0].document_id };
 }
 
 // ── Public verification ─────────────────────────────────────────

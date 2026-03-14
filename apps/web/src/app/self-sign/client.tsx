@@ -9,9 +9,21 @@ import Link from "next/link";
 import SignaturePad from "../../components/SignaturePad";
 import CertificateUpload from "../../components/CertificateUpload";
 import GovBrSign from "../../components/GovBrSign";
+import PdfFormFieldsEditor, { type PdfFormFieldDefinition } from "../../components/PdfFormFieldsEditor";
 
-type Step = "upload" | "place" | "sign" | "done";
+type Step = "upload" | "place" | "fill" | "sign" | "done";
 type SignMethod = "electronic" | "certificate" | "govbr";
+type FillTool = "signature" | "text" | "check" | "cross" | "dot";
+type OverlayField = {
+  id: string;
+  type: "text" | "check" | "cross" | "dot";
+  page: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  value?: string;
+};
 
 export default function SelfSignPage() {
   const { user, loading: authLoading } = useAuth();
@@ -26,12 +38,11 @@ export default function SelfSignPage() {
   const [error, setError] = useState("");
 
   // PDF rendering
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const pageContainerRef = useRef<HTMLDivElement>(null);
+  const canvasRefs = useRef<Map<number, HTMLCanvasElement>>(new Map());
+  const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [numPages, setNumPages] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pdfRendered, setPdfRendered] = useState(false);
 
   // Signature field placement
   const [sigField, setSigField] = useState<{
@@ -43,6 +54,11 @@ export default function SelfSignPage() {
   } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
+  const [draggingFieldId, setDraggingFieldId] = useState<string | null>(null);
+  const [resizeFieldId, setResizeFieldId] = useState<string | null>(null);
+  const [activeTool, setActiveTool] = useState<FillTool>("signature");
+  const [overlayFields, setOverlayFields] = useState<OverlayField[]>([]);
+  const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(null);
 
   // Signature data
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
@@ -50,6 +66,7 @@ export default function SelfSignPage() {
   const [showCertModal, setShowCertModal] = useState(false);
   const [showGovbrModal, setShowGovbrModal] = useState(false);
   const [savedDocId, setSavedDocId] = useState<string | null>(null);
+  const [preparedDocId, setPreparedDocId] = useState<string | null>(null);
   const [savedEnvelopeId, setSavedEnvelopeId] = useState<string | null>(null);
   const [verificationCode, setVerificationCode] = useState<string | null>(null);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -57,6 +74,9 @@ export default function SelfSignPage() {
   const [certSignResult, setCertSignResult] = useState<any>(null);
   const [govbrResult, setGovbrResult] = useState<any>(null);
   const [signingMessage, setSigningMessage] = useState<string | null>(null);
+  const [formFields, setFormFields] = useState<PdfFormFieldDefinition[]>([]);
+  const [formValues, setFormValues] = useState<Record<string, string | boolean | string[]>>({});
+  const [preparingDocument, setPreparingDocument] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) router.replace("/login");
@@ -73,7 +93,11 @@ export default function SelfSignPage() {
     const storedEnvelopeId = sessionStorage.getItem("govbr_envelope_id");
     const storedDocId = sessionStorage.getItem("govbr_doc_id");
     const storedPosition = sessionStorage.getItem("govbr_sig_position");
+    const storedFormValues = sessionStorage.getItem("govbr_form_values");
+    const storedOverlayFields = sessionStorage.getItem("govbr_overlay_fields");
     const parsedPosition = storedPosition ? JSON.parse(storedPosition) : undefined;
+    const parsedFormValues = storedFormValues ? JSON.parse(storedFormValues) : undefined;
+    const parsedOverlayFields = storedOverlayFields ? JSON.parse(storedOverlayFields) : undefined;
 
     if (!storedRecipientToken) {
       setError("Dados da sessão Gov.br perdidos. Tente novamente.");
@@ -85,7 +109,13 @@ export default function SelfSignPage() {
       setLoading(true);
       setSigningMessage("Assinando documento com identidade Gov.br…");
       try {
-        const result = await api.govbrSign(govbrSessionId, storedRecipientToken, parsedPosition);
+        const result = await api.govbrSign(
+          govbrSessionId,
+          storedRecipientToken,
+          parsedPosition,
+          parsedFormValues,
+          parsedOverlayFields
+        );
         setGovbrResult(result);
 
         if (storedDocId) setSavedDocId(storedDocId);
@@ -114,6 +144,8 @@ export default function SelfSignPage() {
         sessionStorage.removeItem("govbr_envelope_id");
         sessionStorage.removeItem("govbr_doc_id");
         sessionStorage.removeItem("govbr_sig_position");
+        sessionStorage.removeItem("govbr_form_values");
+        sessionStorage.removeItem("govbr_overlay_fields");
 
         // Remove the query param from the URL
         router.replace("/self-sign");
@@ -149,32 +181,42 @@ export default function SelfSignPage() {
     return () => { cancelled = true; };
   }, [fileUrl]);
 
-  // Render current page — re-runs when step changes so canvas is in the DOM
+  // Render all pages — re-runs when step changes so canvases are in the DOM
   useEffect(() => {
     if (!pdfDoc) return;
-    // Small delay to let the canvas mount after a step change
     const timer = setTimeout(async () => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
       try {
-        await renderPdfPage(pdfDoc, currentPage, canvas, 1.5);
-        setPdfRendered(true);
+        await Promise.all(
+          Array.from({ length: numPages }, (_, index) => {
+            const pageNumber = index + 1;
+            const canvas = canvasRefs.current.get(pageNumber);
+            if (!canvas) return Promise.resolve();
+            return renderPdfPage(pdfDoc, pageNumber, canvas, 1.5);
+          })
+        );
       } catch (err) {
         console.error("PDF render error:", err);
       }
     }, 50);
     return () => clearTimeout(timer);
-  }, [pdfDoc, currentPage, step]);
+  }, [pdfDoc, numPages, step]);
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (f) {
       setFile(f);
       setTitle(f.name.replace(/\.[^.]+$/, ""));
+      setPreparedDocId(null);
+      setFormFields([]);
+      setFormValues({});
+      setSigField(null);
+      setOverlayFields([]);
+      setSelectedOverlayId(null);
+      setResizeFieldId(null);
     }
   }
 
-  function goToPlaceStep() {
+  async function goToPlaceStep() {
     if (!file) {
       setError("Selecione um arquivo PDF");
       return;
@@ -184,48 +226,127 @@ export default function SelfSignPage() {
       return;
     }
     setError("");
-    setStep("place");
+    setPreparingDocument(true);
+    try {
+      const doc = preparedDocId ? { id: preparedDocId } : await api.uploadDocument(file);
+      const nextDocId = doc.id as string;
+      setPreparedDocId(nextDocId);
+      setSavedDocId(nextDocId);
+      const formResult = await api.getDocumentFormFields(nextDocId);
+      const fields = (formResult.data ?? []) as PdfFormFieldDefinition[];
+      setFormFields(fields);
+      setFormValues(Object.fromEntries(fields.flatMap((field) => field.value != null ? [[field.name, field.value]] : [])));
+      setStep("place");
+    } catch (err: any) {
+      setError(err?.message ?? "Não foi possível preparar o documento.");
+    } finally {
+      setPreparingDocument(false);
+    }
   }
 
-  // Place signature field by clicking on PDF
-  function handlePdfClick(e: React.MouseEvent<HTMLDivElement>) {
+  // Place fill/sign fields by clicking on PDF
+  function handlePdfClick(page: number, e: React.MouseEvent<HTMLDivElement>) {
+    setCurrentPage(page);
     if (step !== "place") return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
-    // Default signature field: 25% wide, 8% tall
-    setSigField({
-      page: currentPage,
-      x: Math.max(0, Math.min(x - 12.5, 75)),
-      y: Math.max(0, Math.min(y - 4, 92)),
-      width: 25,
-      height: 8,
-    });
+    if (activeTool === "signature") {
+      setSigField({
+        page,
+        x: Math.max(0, Math.min(x - 12.5, 75)),
+        y: Math.max(0, Math.min(y - 4, 92)),
+        width: 25,
+        height: 8,
+      });
+      return;
+    }
+
+    const nextField = createOverlayField(activeTool, page, x, y);
+    setOverlayFields((current) => [...current, nextField]);
+    setSelectedOverlayId(nextField.id);
   }
 
   // Drag to reposition
-  function handleFieldMouseDown(e: React.MouseEvent) {
+  function handleFieldMouseDown(e: React.MouseEvent, fieldId: string) {
     e.stopPropagation();
     setIsDragging(true);
     setDragStart({ x: e.clientX, y: e.clientY });
+    setDraggingFieldId(fieldId);
   }
 
   function handleFieldMouseMove(e: React.MouseEvent<HTMLDivElement>) {
-    if (!isDragging || !dragStart || !sigField) return;
+    if (!isDragging || !dragStart) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const dx = ((e.clientX - dragStart.x) / rect.width) * 100;
     const dy = ((e.clientY - dragStart.y) / rect.height) * 100;
-    setSigField({
-      ...sigField,
-      x: Math.max(0, Math.min(sigField.x + dx, 100 - sigField.width)),
-      y: Math.max(0, Math.min(sigField.y + dy, 100 - sigField.height)),
-    });
+    if (resizeFieldId === "signature") {
+      if (!sigField) return;
+      setSigField({
+        ...sigField,
+        width: clamp(sigField.width + dx, 8, 60),
+        height: clamp(sigField.height + dy, 3, 25),
+      });
+    } else if (resizeFieldId) {
+      setOverlayFields((current) => current.map((field) => {
+        if (field.id !== resizeFieldId) return field;
+        return {
+          ...field,
+          width: clamp(field.width + dx, field.type === "text" ? 8 : 2.5, field.type === "text" ? 60 : 18),
+          height: clamp(field.height + dy, field.type === "text" ? 3 : 2.5, field.type === "text" ? 20 : 18),
+        };
+      }));
+    } else if (draggingFieldId === "signature") {
+      if (!sigField) return;
+      setSigField({
+        ...sigField,
+        x: Math.max(0, Math.min(sigField.x + dx, 100 - sigField.width)),
+        y: Math.max(0, Math.min(sigField.y + dy, 100 - sigField.height)),
+      });
+    } else if (draggingFieldId) {
+      setOverlayFields((current) => current.map((field) => {
+        if (field.id !== draggingFieldId) return field;
+        return {
+          ...field,
+          x: Math.max(0, Math.min(field.x + dx, 100 - field.width)),
+          y: Math.max(0, Math.min(field.y + dy, 100 - field.height)),
+        };
+      }));
+    }
     setDragStart({ x: e.clientX, y: e.clientY });
   }
 
   function handleFieldMouseUp() {
     setIsDragging(false);
     setDragStart(null);
+    setDraggingFieldId(null);
+    setResizeFieldId(null);
+  }
+
+  function updateOverlayField(id: string, patch: Partial<OverlayField>) {
+    setOverlayFields((current) => current.map((field) => field.id === id ? { ...field, ...patch } : field));
+  }
+
+  function removeOverlayField(id: string) {
+    setOverlayFields((current) => current.filter((field) => field.id !== id));
+    setSelectedOverlayId((current) => current === id ? null : current);
+  }
+
+  function updateSelectedSize(dimension: "width" | "height", value: number) {
+    if (selectedOverlayId) {
+      updateOverlayField(selectedOverlayId, { [dimension]: value } as Partial<OverlayField>);
+      return;
+    }
+    if (sigField) {
+      setSigField({ ...sigField, [dimension]: value });
+    }
+  }
+
+  function selectedFieldConfig() {
+    if (selectedOverlayId) {
+      return overlayFields.find((field) => field.id === selectedOverlayId) ?? null;
+    }
+    return sigField ? { ...sigField, id: "signature", type: "signature" as const } : null;
   }
 
   function confirmPlacement() {
@@ -234,8 +355,20 @@ export default function SelfSignPage() {
       return;
     }
     setError("");
+    if (hasManualTextFields(overlayFields)) {
+      setStep("fill");
+      return;
+    }
     setStep("sign");
     setShowSigPad(true);
+  }
+
+  function goToSigningStep() {
+    setError("");
+    setStep("sign");
+    if (signMethod === "electronic" && !signatureDataUrl) {
+      setShowSigPad(true);
+    }
   }
 
   function handleSignatureSaved(dataUrl: string) {
@@ -248,6 +381,10 @@ export default function SelfSignPage() {
       setError("Dados da assinatura incompletos. Refaça a assinatura.");
       return;
     }
+    if (!areManualTextFieldsFilled(overlayFields)) {
+      setError("Preencha todos os campos de texto adicionados antes de assinar.");
+      return;
+    }
     if (!sigField) {
       setError("Posicione o campo de assinatura no documento primeiro.");
       return;
@@ -257,13 +394,13 @@ export default function SelfSignPage() {
     setSigningMessage("Assinando documento eletronicamente...");
     try {
       // 1) Upload document
-      const doc = await api.uploadDocument(file);
-      setSavedDocId(doc.id);
+      const documentId = preparedDocId ?? (await api.uploadDocument(file)).id;
+      setSavedDocId(documentId);
 
       // 2) Create a self-sign envelope
       const envelope = await api.createEnvelope({
         title,
-        documentId: doc.id,
+        documentId,
         recipients: [
           {
             name: user!.name,
@@ -282,6 +419,8 @@ export default function SelfSignPage() {
         signatureData: signatureDataUrl,
         signatureType: "draw",
         signaturePosition: sigField ?? undefined,
+        formFields: normalizeFormValues(formValues),
+        overlayFields,
       });
 
       // 5) Send envelope (marks as sent then auto-completes)
@@ -311,18 +450,22 @@ export default function SelfSignPage() {
 
   async function handleCertificateSign(certFile: File, certPassword: string) {
     if (!file) return;
+    if (!areManualTextFieldsFilled(overlayFields)) {
+      setError("Preencha todos os campos de texto adicionados antes de assinar.");
+      return;
+    }
     setError("");
     setLoading(true);
     setSigningMessage("Assinando com Certificado Digital...");
     try {
       // 1) Upload document
-      const doc = await api.uploadDocument(file);
-      setSavedDocId(doc.id);
+      const documentId = preparedDocId ?? (await api.uploadDocument(file)).id;
+      setSavedDocId(documentId);
 
       // 2) Create a self-sign envelope
       const envelope = await api.createEnvelope({
         title,
-        documentId: doc.id,
+        documentId,
         recipients: [
           {
             name: user!.name,
@@ -343,6 +486,8 @@ export default function SelfSignPage() {
         recipientToken,
         envelopeId: envelope.id,
         signaturePosition: sigField ?? undefined,
+        formFields: normalizeFormValues(formValues),
+        overlayFields,
       });
 
       setCertSignResult(result);
@@ -378,18 +523,22 @@ export default function SelfSignPage() {
 
   async function handleGovBrSign() {
     if (!file) return;
+    if (!areManualTextFieldsFilled(overlayFields)) {
+      setError("Preencha todos os campos de texto adicionados antes de assinar.");
+      return;
+    }
     setError("");
     setLoading(true);
     setSigningMessage("Preparando documento para assinatura Gov.br…");
     try {
       // 1) Upload document
-      const doc = await api.uploadDocument(file);
-      setSavedDocId(doc.id);
+      const documentId = preparedDocId ?? (await api.uploadDocument(file)).id;
+      setSavedDocId(documentId);
 
       // 2) Create a self-sign envelope
       const envelope = await api.createEnvelope({
         title,
-        documentId: doc.id,
+        documentId,
         recipients: [
           {
             name: user!.name,
@@ -406,10 +555,12 @@ export default function SelfSignPage() {
       // 4) Store data in sessionStorage so we can recover after the redirect
       sessionStorage.setItem("govbr_recipient_token", recipientToken);
       sessionStorage.setItem("govbr_envelope_id", envelope.id);
-      sessionStorage.setItem("govbr_doc_id", doc.id);
+      sessionStorage.setItem("govbr_doc_id", documentId);
       if (sigField) {
         sessionStorage.setItem("govbr_sig_position", JSON.stringify(sigField));
       }
+      sessionStorage.setItem("govbr_form_values", JSON.stringify(normalizeFormValues(formValues)));
+      sessionStorage.setItem("govbr_overlay_fields", JSON.stringify(overlayFields));
 
       // 5) Start the real Gov.br OAuth2 flow
       const { authUrl } = await api.govbrAuthorize({
@@ -447,6 +598,163 @@ export default function SelfSignPage() {
   }
 
   if (authLoading || !user) return null;
+
+  function scrollToPage(page: number) {
+    const nextPage = clamp(Math.round(page), 1, Math.max(1, numPages));
+    setCurrentPage(nextPage);
+    pageRefs.current.get(nextPage)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function renderPageNavigation() {
+    if (numPages <= 1) return null;
+    return (
+      <div className="pdf-toolbar">
+        <button className="btn btn-secondary btn-sm" disabled={currentPage <= 1} onClick={() => scrollToPage(currentPage - 1)}>
+          ←
+        </button>
+        <span className="text-sm">Página {currentPage} de {numPages}</span>
+        <button className="btn btn-secondary btn-sm" disabled={currentPage >= numPages} onClick={() => scrollToPage(currentPage + 1)}>
+          →
+        </button>
+      </div>
+    );
+  }
+
+  function renderSignatureOverlay(pageNumber: number, signed = false) {
+    if (!sigField || sigField.page !== pageNumber) return null;
+
+    return (
+      <div
+        className={`sig-field-overlay${signed ? " signed" : ""}`}
+        style={{
+          left: `${sigField.x}%`,
+          top: `${sigField.y}%`,
+          width: `${sigField.width}%`,
+          height: `${sigField.height}%`,
+        }}
+        onMouseDown={(e) => {
+          setCurrentPage(pageNumber);
+          handleFieldMouseDown(e, "signature");
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          setCurrentPage(pageNumber);
+          setSelectedOverlayId(null);
+        }}
+      >
+        {signed && signatureDataUrl ? (
+          <img src={signatureDataUrl} alt="Assinatura" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+        ) : (
+          <span className="sig-field-label">✍️ Assinatura</span>
+        )}
+        <button
+          type="button"
+          className="field-resize-handle"
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            setCurrentPage(pageNumber);
+            setIsDragging(true);
+            setDragStart({ x: e.clientX, y: e.clientY });
+            setResizeFieldId("signature");
+          }}
+        />
+      </div>
+    );
+  }
+
+  function renderOverlaysForPage(pageNumber: number, mode: "place" | "fill" | "sign") {
+    return overlayFields.filter((field) => field.page === pageNumber).map((field) => (
+      <div
+        key={field.id}
+        className={`pdf-field pdf-field-${field.type}${mode !== "place" || selectedOverlayId === field.id ? " pdf-field-filled" : ""}`}
+        style={{
+          left: `${field.x}%`,
+          top: `${field.y}%`,
+          width: `${field.width}%`,
+          height: `${field.height}%`,
+          cursor: "move",
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          setCurrentPage(pageNumber);
+          setSelectedOverlayId(field.id);
+        }}
+        onMouseDown={(e) => {
+          setCurrentPage(pageNumber);
+          handleFieldMouseDown(e, field.id);
+        }}
+      >
+        {mode === "fill" && field.type === "text" ? (
+          <input
+            className="pdf-inline-input"
+            value={field.value ?? ""}
+            onChange={(e) => updateOverlayField(field.id, { value: e.target.value })}
+            placeholder="Digite aqui"
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <span className="pdf-field-label">
+            {field.type === "text" ? (field.value?.trim() || "Texto") : field.type === "check" ? "✓" : field.type === "cross" ? "X" : "•"}
+          </span>
+        )}
+        <button
+          type="button"
+          className="field-resize-handle"
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            setCurrentPage(pageNumber);
+            setSelectedOverlayId(field.id);
+            setIsDragging(true);
+            setDragStart({ x: e.clientX, y: e.clientY });
+            setResizeFieldId(field.id);
+          }}
+        />
+      </div>
+    ));
+  }
+
+  function renderPdfPages(mode: "place" | "fill" | "sign") {
+    return (
+      <>
+        {renderPageNavigation()}
+        <div className="pdf-pages-stack">
+          {Array.from({ length: numPages }, (_, index) => {
+            const pageNumber = index + 1;
+            return (
+              <div
+                key={pageNumber}
+                ref={(node) => {
+                  if (node) pageRefs.current.set(pageNumber, node);
+                  else pageRefs.current.delete(pageNumber);
+                }}
+                className={`pdf-page-shell${currentPage === pageNumber ? " active" : ""}`}
+              >
+                <div className="pdf-page-badge">Página {pageNumber}</div>
+                <div
+                  className="pdf-page-container active"
+                  style={{ position: "relative", cursor: mode === "place" ? "crosshair" : "default" }}
+                  onClick={(e) => handlePdfClick(pageNumber, e)}
+                  onMouseMove={handleFieldMouseMove}
+                  onMouseUp={handleFieldMouseUp}
+                  onMouseLeave={handleFieldMouseUp}
+                >
+                  <canvas
+                    ref={(node) => {
+                      if (node) canvasRefs.current.set(pageNumber, node);
+                      else canvasRefs.current.delete(pageNumber);
+                    }}
+                  />
+                  {renderSignatureOverlay(pageNumber, mode === "sign")}
+                  {renderOverlaysForPage(pageNumber, mode)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -488,23 +796,28 @@ export default function SelfSignPage() {
       <main className="container" style={{ maxWidth: step === "upload" ? 640 : 1100 }}>
         {/* Progress steps */}
         <div className="step-progress">
-          <div className={`step-item ${step === "upload" ? "active" : ["place", "sign", "done"].includes(step) ? "completed" : ""}`}>
+          <div className={`step-item ${step === "upload" ? "active" : ["place", "fill", "sign", "done"].includes(step) ? "completed" : ""}`}>
             <span className="step-num">1</span>
             <span className="step-label">Documento</span>
           </div>
           <div className="step-line" />
-          <div className={`step-item ${step === "place" ? "active" : ["sign", "done"].includes(step) ? "completed" : ""}`}>
+          <div className={`step-item ${step === "place" ? "active" : ["fill", "sign", "done"].includes(step) ? "completed" : ""}`}>
             <span className="step-num">2</span>
             <span className="step-label">Posicionar campo</span>
           </div>
           <div className="step-line" />
-          <div className={`step-item ${step === "sign" ? "active" : step === "done" ? "completed" : ""}`}>
+          <div className={`step-item ${step === "fill" ? "active" : ["sign", "done"].includes(step) ? "completed" : ""}`}>
             <span className="step-num">3</span>
+            <span className="step-label">Preencher</span>
+          </div>
+          <div className="step-line" />
+          <div className={`step-item ${step === "sign" ? "active" : step === "done" ? "completed" : ""}`}>
+            <span className="step-num">4</span>
             <span className="step-label">Assinar</span>
           </div>
           <div className="step-line" />
           <div className={`step-item ${step === "done" ? "active" : ""}`}>
-            <span className="step-num">4</span>
+            <span className="step-num">5</span>
             <span className="step-label">Concluído</span>
           </div>
         </div>
@@ -550,45 +863,174 @@ export default function SelfSignPage() {
             </div>
 
             <button className="btn btn-primary" onClick={goToPlaceStep} disabled={!file}>
-              Continuar →
+              {preparingDocument ? "Preparando documento..." : "Continuar →"}
             </button>
           </div>
         )}
 
-        {/* ── STEP 2: Place signature field ── */}
+        {/* ── STEP 2: Place fill/sign fields ── */}
         {step === "place" && (
           <div className="self-sign-layout">
             <div className="self-sign-sidebar">
               <div className="card">
-                <h2>Posicionar assinatura</h2>
-                <p className="text-sm text-muted">
-                  Clique no documento ao lado para posicionar o campo de assinatura.
-                  Arraste para reposicionar.
+                <h2>Ferramentas de preenchimento</h2>
+                <p className="text-sm text-muted fill-toolbar-copy">
+                  Selecione uma ferramenta e clique no PDF para inserir.
                 </p>
-                {sigField ? (
-                  <div className="alert alert-success">
-                    ✓ Campo posicionado na página {sigField.page}
+                <div className="fill-tool-grid">
+                  {[
+                    { id: "text", icon: "A", title: "Texto" },
+                    { id: "signature", icon: "✍", title: "Assinar" },
+                    { id: "check", icon: "✓", title: "Visto" },
+                    { id: "cross", icon: "X", title: "X" },
+                    { id: "dot", icon: "•", title: "Ponto" },
+                  ].map((tool) => (
+                    <button
+                      key={tool.id}
+                      className={`fill-tool-button ${activeTool === tool.id ? "active" : ""}`}
+                      onClick={() => setActiveTool(tool.id as FillTool)}
+                      title={tool.title}
+                    >
+                      <span className="fill-tool-icon">{tool.icon}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="fill-tool-hint">
+                  Clique para inserir. Arraste para mover. Redimensione pelo canto.
+                </div>
+                <div className="fill-step-actions">
+                  <button
+                    className="btn btn-primary"
+                    style={{ width: "100%" }}
+                    disabled={!sigField}
+                    onClick={confirmPlacement}
+                  >
+                    Próximo: conferir e assinar →
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    style={{ width: "100%" }}
+                    onClick={() => { setStep("upload"); setSigField(null); setOverlayFields([]); setSelectedOverlayId(null); }}
+                  >
+                    ← Voltar ao upload
+                  </button>
+                </div>
+                <div className="fill-status-row">
+                  {formFields.length > 0 && (
+                    <span className="fill-status-pill ok">{formFields.length} campo(s) detectado(s)</span>
+                  )}
+                  <span className={`fill-status-pill ${sigField ? "ok" : "warn"}`}>
+                    {sigField ? `Assinatura na pág. ${sigField.page}` : "Posicione a assinatura"}
+                  </span>
+                  {overlayFields.length > 0 && (
+                    <span className="fill-status-pill neutral">{overlayFields.length} marcação(ões)</span>
+                  )}
+                </div>
+                <div className="fill-items-card">
+                  <div className="fill-items-head">
+                    <strong>Itens inseridos</strong>
+                    <span>{overlayFields.length + (sigField ? 1 : 0)}</span>
                   </div>
-                ) : (
-                  <div className="alert" style={{ background: "#fffbeb", color: "#92400e", border: "1px solid #fde68a" }}>
-                    Clique no PDF para posicionar
+                  <div className="fill-items-list">
+                    {sigField && (
+                      <button
+                        type="button"
+                        className={`fill-item-row ${selectedOverlayId == null ? "active" : ""}`}
+                        onClick={() => {
+                          setSelectedOverlayId(null);
+                          scrollToPage(sigField.page);
+                        }}
+                      >
+                        <span className="fill-item-icon">✍</span>
+                        <span className="fill-item-copy">Assinatura</span>
+                        <span className="fill-item-meta">Pág. {sigField.page}</span>
+                      </button>
+                    )}
+                    {overlayFields.map((field, index) => (
+                      <button
+                        key={field.id}
+                        type="button"
+                        className={`fill-item-row ${selectedOverlayId === field.id ? "active" : ""}`}
+                        onClick={() => {
+                          setSelectedOverlayId(field.id);
+                          scrollToPage(field.page);
+                        }}
+                      >
+                        <span className="fill-item-icon">
+                          {field.type === "text" ? "A" : field.type === "check" ? "✓" : field.type === "cross" ? "X" : "•"}
+                        </span>
+                        <span className="fill-item-copy">
+                          {field.type === "text"
+                            ? field.value?.trim() || `Texto ${index + 1}`
+                            : field.type === "check"
+                              ? `Visto ${index + 1}`
+                              : field.type === "cross"
+                                ? `X ${index + 1}`
+                                : `Ponto ${index + 1}`}
+                        </span>
+                        <span className="fill-item-meta">Pág. {field.page}</span>
+                      </button>
+                    ))}
+                    {!sigField && overlayFields.length === 0 && (
+                      <div className="fill-items-empty">Nenhum item inserido ainda.</div>
+                    )}
+                  </div>
+                </div>
+                {selectedOverlayId && overlayFields.find((field) => field.id === selectedOverlayId)?.type === "text" && (
+                  <div className="form-group" style={{ marginTop: 12 }}>
+                    <label>Texto do campo selecionado</label>
+                    <input
+                      value={overlayFields.find((field) => field.id === selectedOverlayId)?.value ?? ""}
+                      onChange={(e) => updateOverlayField(selectedOverlayId, { value: e.target.value })}
+                      placeholder="Digite o conteúdo"
+                    />
                   </div>
                 )}
-                <button
-                  className="btn btn-primary"
-                  style={{ width: "100%" }}
-                  disabled={!sigField}
-                  onClick={confirmPlacement}
-                >
-                  Confirmar posição →
-                </button>
-                <button
-                  className="btn btn-secondary mt-16"
-                  style={{ width: "100%" }}
-                  onClick={() => { setStep("upload"); setSigField(null); }}
-                >
-                  ← Voltar
-                </button>
+                {selectedFieldConfig() && (
+                  <div className="fill-inspector">
+                    <div className="fill-inspector-head">
+                      <strong>Item selecionado</strong>
+                      <span>
+                        {selectedOverlayId
+                          ? overlayFields.find((field) => field.id === selectedOverlayId)?.type ?? "campo"
+                          : "signature"}
+                      </span>
+                    </div>
+                    <div className="fill-size-grid">
+                      <label>
+                        <span>Largura</span>
+                        <input
+                          type="range"
+                          min={selectedOverlayId ? 3 : 8}
+                          max={selectedOverlayId ? 60 : 60}
+                          step="0.5"
+                          value={selectedFieldConfig()?.width ?? 10}
+                          onChange={(e) => updateSelectedSize("width", Number(e.target.value))}
+                        />
+                      </label>
+                      <label>
+                        <span>Altura</span>
+                        <input
+                          type="range"
+                          min={selectedOverlayId ? 2.5 : 3}
+                          max={selectedOverlayId ? 20 : 25}
+                          step="0.5"
+                          value={selectedFieldConfig()?.height ?? 5}
+                          onChange={(e) => updateSelectedSize("height", Number(e.target.value))}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                )}
+                {selectedOverlayId && (
+                  <button
+                    className="btn btn-secondary"
+                    style={{ width: "100%", marginBottom: 12 }}
+                    onClick={() => removeOverlayField(selectedOverlayId)}
+                  >
+                    Remover marcação selecionada
+                  </button>
+                )}
               </div>
             </div>
 
@@ -599,52 +1041,56 @@ export default function SelfSignPage() {
                   <p>Carregando PDF…</p>
                 </div>
               ) : (
-              <>
-              {/* Page navigation */}
-              {numPages > 1 && (
-                <div className="pdf-toolbar">
-                  <button className="btn btn-secondary btn-sm" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => p - 1)}>
-                    ←
-                  </button>
-                  <span className="text-sm">Página {currentPage} de {numPages}</span>
-                  <button className="btn btn-secondary btn-sm" disabled={currentPage >= numPages} onClick={() => setCurrentPage((p) => p + 1)}>
-                    →
-                  </button>
-                </div>
-              )}
-
-              <div
-                className="pdf-page-container active"
-                style={{ position: "relative", cursor: "crosshair" }}
-                onClick={handlePdfClick}
-                onMouseMove={handleFieldMouseMove}
-                onMouseUp={handleFieldMouseUp}
-                onMouseLeave={handleFieldMouseUp}
-              >
-                <canvas ref={canvasRef} />
-
-                {sigField && sigField.page === currentPage && (
-                  <div
-                    className="sig-field-overlay"
-                    style={{
-                      left: `${sigField.x}%`,
-                      top: `${sigField.y}%`,
-                      width: `${sigField.width}%`,
-                      height: `${sigField.height}%`,
-                    }}
-                    onMouseDown={handleFieldMouseDown}
-                  >
-                    <span className="sig-field-label">✍️ Assinatura</span>
-                  </div>
-                )}
-              </div>
-              </>
+                renderPdfPages("place")
               )}
             </div>
           </div>
         )}
 
-        {/* ── STEP 3: Sign ── */}
+        {/* ── STEP 3: Fill text fields ── */}
+        {step === "fill" && (
+          <div className="self-sign-layout">
+            <div className="self-sign-sidebar">
+              <div className="card">
+                <h2>Preencher campos</h2>
+                <p className="text-sm text-muted">
+                  Preencha os campos diretamente sobre o PDF. Você só pode seguir quando todos os campos de texto adicionados estiverem preenchidos.
+                </p>
+                <div className="fill-status-row">
+                  <span className="fill-status-pill neutral">
+                    {overlayFields.filter((field) => field.type === "text").length} campo(s) de texto
+                  </span>
+                  <span className={`fill-status-pill ${areManualTextFieldsFilled(overlayFields) ? "ok" : "warn"}`}>
+                    {areManualTextFieldsFilled(overlayFields) ? "Tudo preenchido" : "Há campos pendentes"}
+                  </span>
+                </div>
+                <div className="fill-step-actions">
+                  <button
+                    className="btn btn-primary"
+                    style={{ width: "100%" }}
+                    onClick={goToSigningStep}
+                    disabled={!areManualTextFieldsFilled(overlayFields)}
+                  >
+                    Próximo: assinar →
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    style={{ width: "100%" }}
+                    onClick={() => setStep("place")}
+                  >
+                    ← Voltar ao posicionamento
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="self-sign-pdf">
+              {renderPdfPages("fill")}
+            </div>
+          </div>
+        )}
+
+        {/* ── STEP 4: Sign ── */}
         {step === "sign" && (
           <div className="self-sign-layout">
             <div className="self-sign-sidebar">
@@ -653,40 +1099,31 @@ export default function SelfSignPage() {
 
                 {error && <div className="alert alert-error" style={{ marginBottom: 12 }}>{error}</div>}
 
-                {/* Signing method selector */}
-                <div className="sig-method-selector">
-                  <div
-                    className={`sig-method-card ${signMethod === "electronic" ? "selected" : ""}`}
-                    onClick={() => setSignMethod("electronic")}
-                  >
-                    <div className="sig-method-icon">✍️</div>
-                    <h4>Eletrônica</h4>
-                    <p>Desenhe ou digite sua assinatura</p>
-                    <span className="sig-method-badge advanced">Avançada</span>
+                {formFields.length > 0 && (
+                  <div style={{ marginBottom: 16 }}>
+                    <PdfFormFieldsEditor
+                      fields={formFields}
+                      values={formValues}
+                      onChange={setFormValues}
+                    />
                   </div>
-                  <div
-                    className={`sig-method-card ${signMethod === "certificate" ? "selected" : ""}`}
-                    onClick={() => { setSignMethod("certificate"); setShowCertModal(true); }}
+                )}
+
+                <div className="form-group" style={{ marginBottom: 16 }}>
+                  <label>Modelo de assinatura</label>
+                  <select
+                    value={signMethod}
+                    onChange={(e) => {
+                      const next = e.target.value as SignMethod;
+                      setSignMethod(next);
+                      if (next === "certificate") setShowCertModal(true);
+                      if (next === "govbr") setShowGovbrModal(true);
+                    }}
                   >
-                    <div className="sig-method-icon">🔐</div>
-                    <h4>Certificado Digital</h4>
-                    <p>Use seu certificado ICP-Brasil A1</p>
-                    <span className="sig-method-badge qualified">Qualificada</span>
-                  </div>
-                  <div
-                    className={`sig-method-card ${signMethod === "govbr" ? "selected" : ""}`}
-                    onClick={() => { setSignMethod("govbr"); setShowGovbrModal(true); }}
-                  >
-                    <div className="sig-method-icon">
-                      <svg width="28" height="28" viewBox="0 0 72 48" fill="none">
-                        <ellipse cx="36" cy="24" rx="36" ry="24" fill="#1351B4"/>
-                        <text x="36" y="30" textAnchor="middle" fill="white" fontSize="18" fontWeight="bold">gov</text>
-                      </svg>
-                    </div>
-                    <h4>Gov.br</h4>
-                    <p>Assine com sua identidade digital Gov.br</p>
-                    <span className="sig-method-badge govbr">Avançada</span>
-                  </div>
+                    <option value="electronic">Eletrônica</option>
+                    <option value="certificate">Certificado Digital</option>
+                    <option value="govbr">Gov.br</option>
+                  </select>
                 </div>
 
                 {/* Electronic signature flow */}
@@ -796,39 +1233,7 @@ export default function SelfSignPage() {
             </div>
 
             <div className="self-sign-pdf">
-              {numPages > 1 && (
-                <div className="pdf-toolbar">
-                  <button className="btn btn-secondary btn-sm" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => p - 1)}>
-                    ←
-                  </button>
-                  <span className="text-sm">Página {currentPage} de {numPages}</span>
-                  <button className="btn btn-secondary btn-sm" disabled={currentPage >= numPages} onClick={() => setCurrentPage((p) => p + 1)}>
-                    →
-                  </button>
-                </div>
-              )}
-
-              <div className="pdf-page-container active" style={{ position: "relative" }}>
-                <canvas ref={canvasRef} />
-
-                {sigField && sigField.page === currentPage && (
-                  <div
-                    className="sig-field-overlay signed"
-                    style={{
-                      left: `${sigField.x}%`,
-                      top: `${sigField.y}%`,
-                      width: `${sigField.width}%`,
-                      height: `${sigField.height}%`,
-                    }}
-                  >
-                    {signatureDataUrl ? (
-                      <img src={signatureDataUrl} alt="Assinatura" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-                    ) : (
-                      <span className="sig-field-label">✍️ Assinatura</span>
-                    )}
-                  </div>
-                )}
-              </div>
+              {renderPdfPages("sign")}
             </div>
 
             {/* Signature pad modal */}
@@ -1051,6 +1456,8 @@ export default function SelfSignPage() {
                 setFileUrl(null);
                 setPdfDoc(null);
                 setSigField(null);
+                setOverlayFields([]);
+                setSelectedOverlayId(null);
                 setSignatureDataUrl(null);
                 setTitle("");
                 setSavedDocId(null);
@@ -1070,4 +1477,56 @@ export default function SelfSignPage() {
       </main>
     </>
   );
+}
+
+function normalizeFormValues(values: Record<string, string | boolean | string[]>) {
+  return Object.fromEntries(
+    Object.entries(values).filter(([, value]) => {
+      if (typeof value === "string") return value.trim().length > 0;
+      if (Array.isArray(value)) return value.length > 0;
+      return true;
+    })
+  );
+}
+
+function createOverlayField(tool: Exclude<FillTool, "signature">, page: number, x: number, y: number): OverlayField {
+  const base = {
+    id: `${tool}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    type: tool,
+    page,
+  } as const;
+
+  if (tool === "text") {
+    return {
+      ...base,
+      x: Math.max(0, Math.min(x - 12, 72)),
+      y: Math.max(0, Math.min(y - 2.8, 94)),
+      width: 24,
+      height: 5.5,
+      value: "",
+    };
+  }
+
+  return {
+    ...base,
+    x: Math.max(0, Math.min(x - 2.5, 95)),
+    y: Math.max(0, Math.min(y - 2.5, 95)),
+    width: 5,
+    height: 5,
+    value: tool === "dot" ? "." : undefined,
+  };
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function hasManualTextFields(fields: OverlayField[]) {
+  return fields.some((field) => field.type === "text");
+}
+
+function areManualTextFieldsFilled(fields: OverlayField[]) {
+  return fields
+    .filter((field) => field.type === "text")
+    .every((field) => (field.value ?? "").trim().length > 0);
 }

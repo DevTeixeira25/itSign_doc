@@ -76,6 +76,14 @@ export async function authGuard(
       };
     }
   } catch (err) {
+    request.log.error(
+      {
+        err,
+        authHeaderPresent: Boolean(header),
+        tokenPrefix: token.slice(0, 16),
+      },
+      "Firebase token verification failed"
+    );
     return reply
       .status(401)
       .send({ statusCode: 401, error: "Unauthorized", message: "Token inválido ou expirado" });

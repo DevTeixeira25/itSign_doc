@@ -72,13 +72,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (fbUser) {
         try {
+          const token = await fbUser.getIdToken();
+          api.setToken(token);
           const profile = await ensureLocalUser(fbUser);
           setUser(profile);
         } catch (err) {
           console.error("[auth] Failed to sync Firebase user:", err);
+          api.setToken(null);
           setUser(null);
         }
       } else {
+        api.setToken(null);
         setUser(null);
       }
 
@@ -100,20 +104,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const cred = await signInWithEmailAndPassword(firebaseAuth, email, password);
+    api.setToken(await cred.user.getIdToken());
     const profile = await ensureLocalUser(cred.user);
     setUser(profile);
+    setFirebaseUser(cred.user);
   };
 
   const loginWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
     const cred = await signInWithPopup(firebaseAuth, provider);
+    api.setToken(await cred.user.getIdToken());
     const profile = await ensureLocalUser(cred.user);
     setUser(profile);
+    setFirebaseUser(cred.user);
   };
 
   const logout = async () => {
     await signOut(firebaseAuth);
+    api.setToken(null);
     setUser(null);
+    setFirebaseUser(null);
   };
 
   const resetPassword = async (email: string) => {
@@ -123,6 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = async (name: string, email: string, password: string, organizationName: string) => {
     const cred = await createUserWithEmailAndPassword(firebaseAuth, email, password);
     await fbUpdateProfile(cred.user, { displayName: name });
+    api.setToken(await cred.user.getIdToken());
     const profile = await saveUserToFirestore(cred.user, { organizationName });
     setUser(profile);
     setFirebaseUser(cred.user);

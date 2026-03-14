@@ -4,6 +4,7 @@ import "package:shared_preferences/shared_preferences.dart";
 class AuthService {
   static const _tokenKey = "itsign_token";
   static const _userKey = "itsign_user";
+  static const _darkModeKey = "itsign_dark_mode";
 
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
@@ -31,5 +32,15 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     await prefs.remove(_userKey);
+  }
+
+  static Future<bool> getDarkMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_darkModeKey) ?? false;
+  }
+
+  static Future<void> setDarkMode(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_darkModeKey, enabled);
   }
 }

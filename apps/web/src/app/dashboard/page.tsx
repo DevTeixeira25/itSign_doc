@@ -21,6 +21,7 @@ export default function DashboardPage() {
   const [envelopes, setEnvelopes] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -28,15 +29,39 @@ export default function DashboardPage() {
       return;
     }
     if (user) {
-      api.listEnvelopes().then((res: any) => {
-        setEnvelopes(res.data);
-        setTotal(res.total);
-        setLoading(false);
-      });
+      setLoading(true);
+      setError(null);
+      api.listEnvelopes()
+        .then((res: any) => {
+          setEnvelopes(res.data);
+          setTotal(res.total);
+        })
+        .catch((err: any) => {
+          setError(err?.message ?? "Não foi possível carregar o painel.");
+        })
+        .finally(() => {
+          setLoading(false);
+        });
     }
   }, [user, authLoading, router]);
 
-  if (authLoading || !user) return null;
+  if (authLoading) {
+    return (
+      <main className="container center-page">
+        <div className="loader" />
+        <p>Carregando painel…</p>
+      </main>
+    );
+  }
+
+  if (!user) {
+    return (
+      <main className="container center-page">
+        <div className="loader" />
+        <p>Redirecionando para o login…</p>
+      </main>
+    );
+  }
 
   return (
     <>
@@ -47,6 +72,7 @@ export default function DashboardPage() {
           <Link href="/self-sign">Assinar</Link>
           <Link href="/envelopes/new">Enviar para assinatura</Link>
           <Link href="/verify/_">Verificar</Link>
+          <Link href="/api-docs">API Docs</Link>
           <Link href="/profile">Perfil</Link>
           <button onClick={logout}>Sair</button>
         </nav>
@@ -72,7 +98,7 @@ export default function DashboardPage() {
             <h3>Enviar para assinatura</h3>
             <p>Envie um documento para outras pessoas assinarem</p>
           </Link>
-          <Link href="/verify/_" className="action-card" style={{ borderColor: "#bfdbfe", background: "#eff6ff" }}>
+          <Link href="/verify/_" className="action-card action-card-verify">
             <span className="action-card-icon">🔍</span>
             <h3>Verificar documento</h3>
             <p>Verifique a autenticidade de um documento assinado</p>
@@ -104,6 +130,8 @@ export default function DashboardPage() {
           <h2>Envelopes recentes</h2>
           {loading ? (
             <p className="text-muted">Carregando…</p>
+          ) : error ? (
+            <div className="alert alert-error">{error}</div>
           ) : envelopes.length === 0 ? (
             <p className="text-muted">Nenhum envelope criado ainda.</p>
           ) : (

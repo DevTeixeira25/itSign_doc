@@ -14,7 +14,14 @@ export async function envelopeRoutes(app: FastifyInstance) {
   // ── Create envelope ───────────────────────────────────────
   app.post(
     "/v1/envelopes",
-    { preHandler: [authGuard] },
+    {
+      preHandler: [authGuard],
+      schema: {
+        tags: ["Envelopes"],
+        summary: "Criar envelope",
+        security: [{ firebaseBearerAuth: [] }],
+      },
+    },
     async (request, reply) => {
       const body = createEnvelopeSchema.parse(request.body);
       const result = await createEnvelope({
@@ -44,7 +51,14 @@ export async function envelopeRoutes(app: FastifyInstance) {
   // ── Send envelope (draft → sent) ─────────────────────────
   app.post<{ Params: { id: string } }>(
     "/v1/envelopes/:id/send",
-    { preHandler: [authGuard] },
+    {
+      preHandler: [authGuard],
+      schema: {
+        tags: ["Envelopes"],
+        summary: "Enviar envelope",
+        security: [{ firebaseBearerAuth: [] }],
+      },
+    },
     async (request, reply) => {
       const result = await sendEnvelope(
         request.params.id,
@@ -68,7 +82,14 @@ export async function envelopeRoutes(app: FastifyInstance) {
   // ── List envelopes ────────────────────────────────────────
   app.get(
     "/v1/envelopes",
-    { preHandler: [authGuard] },
+    {
+      preHandler: [authGuard],
+      schema: {
+        tags: ["Envelopes"],
+        summary: "Listar envelopes",
+        security: [{ firebaseBearerAuth: [] }],
+      },
+    },
     async (request, reply) => {
       const query = request.query as { page?: string; pageSize?: string };
       const page = Math.max(1, Number(query.page) || 1);
@@ -85,7 +106,14 @@ export async function envelopeRoutes(app: FastifyInstance) {
   // ── Get envelope detail ───────────────────────────────────
   app.get<{ Params: { id: string } }>(
     "/v1/envelopes/:id",
-    { preHandler: [authGuard] },
+    {
+      preHandler: [authGuard],
+      schema: {
+        tags: ["Envelopes"],
+        summary: "Consultar envelope",
+        security: [{ firebaseBearerAuth: [] }],
+      },
+    },
     async (request, reply) => {
       const envelope = await getEnvelope(
         request.params.id,
@@ -98,7 +126,14 @@ export async function envelopeRoutes(app: FastifyInstance) {
   // ── Cancel envelope ───────────────────────────────────────
   app.post<{ Params: { id: string } }>(
     "/v1/envelopes/:id/cancel",
-    { preHandler: [authGuard] },
+    {
+      preHandler: [authGuard],
+      schema: {
+        tags: ["Envelopes"],
+        summary: "Cancelar envelope",
+        security: [{ firebaseBearerAuth: [] }],
+      },
+    },
     async (request, reply) => {
       const result = await cancelEnvelope(
         request.params.id,
